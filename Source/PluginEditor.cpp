@@ -102,7 +102,19 @@ SimpleGainPluginAudioProcessorEditor::SimpleGainPluginAudioProcessorEditor (Simp
         "gain_db",
         gainSlider);
 
-    setSize (420, 420);
+    commandEditor.setTextToShowWhenEmpty ("UP or DOWN", juce::Colours::grey);
+    commandEditor.setJustification (juce::Justification::centredLeft);
+    addAndMakeVisible (commandEditor);
+
+    applyButton.setButtonText ("Apply");
+    applyButton.onClick = [this] { handleApplyCommand(); };
+    addAndMakeVisible (applyButton);
+
+    commandStatusLabel.setText ("Command: ready", juce::dontSendNotification);
+    commandStatusLabel.setJustificationType (juce::Justification::centred);
+    addAndMakeVisible (commandStatusLabel);
+
+    setSize (420, 500);
     startTimerHz (20);
 }
 
@@ -142,6 +154,13 @@ void SimpleGainPluginAudioProcessorEditor::resized()
 
     gainLabel.setBounds (bounds.removeFromTop (24));
     gainSlider.setBounds (bounds.removeFromTop (100).withSizeKeepingCentre (110, 100));
+    bounds.removeFromTop (12);
+
+    auto commandRow = bounds.removeFromTop (28);
+    commandEditor.setBounds (commandRow.removeFromLeft (260));
+    commandRow.removeFromLeft (8);
+    applyButton.setBounds (commandRow);
+    commandStatusLabel.setBounds (bounds.removeFromTop (28));
 }
 
 void SimpleGainPluginAudioProcessorEditor::timerCallback()
@@ -194,4 +213,46 @@ void SimpleGainPluginAudioProcessorEditor::timerCallback()
 
     statusLabel.setText ("Status: " + status, juce::dontSendNotification);
     statusLabel.setColour (juce::Label::textColourId, status == "Clipping" ? juce::Colours::red : juce::Colours::white);
+}
+
+void SimpleGainPluginAudioProcessorEditor::handleApplyCommand()
+{
+    auto command = commandEditor.getText().trim().toUpperCase();
+
+    auto* gainParameter = audioProcessor.apvts.getParameter ("gain_db");
+    auto* gainValue = audioProcessor.apvts.getRawParameterValue ("gain_db");
+
+    if (gainParameter == nullptr || gainValue == nullptr)
+    {
+        commandStatusLabel.setText ("Command: gain parameter not found", juce::dontSendNotification);
+        return;
+    }
+
+    auto currentGainDb = gainValue->load();
+    auto newGainDb = currentGainDb;
+
+    if (command == "UP")
+    {
+        newGainDb = currentGainDb + 1.0f;
+    }
+    else if (command == "DOWN")
+    {
+        newGainDb = currentGainDb - 1.0f;
+    }
+    else
+    {
+        commandStatusLabel.setText ("Unknown command. Use UP or DOWN", juce::dontSendNotification);
+        return;
+    }
+
+    newGainDb = juce::jlimit (-24.0f, 24.0f, newGainDb);
+
+    gainParameter->beginChangeGesture();
+    gainParameter->setValueNotifyingHost (gainParameter->convertTo0to1 (newGainDb));
+    gainParameter->endChangeGesture();
+
+    commandStatusLabel.setText ("Command: " + command + " -> Gain "
+                                    + juce::String (newGainDb, 1)
+                                    + " dB",
+                                juce::dontSendNotification);
 }

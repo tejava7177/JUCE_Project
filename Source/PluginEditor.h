@@ -47,6 +47,7 @@ public:
 
 private:
     void timerCallback() override;
+    void handleApplyCommand();
 
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
@@ -61,6 +62,9 @@ private:
     juce::Label silenceRatioLabel;
     juce::Label gainLabel;
     juce::Slider gainSlider;
+    juce::TextEditor commandEditor;
+    juce::TextButton applyButton;
+    juce::Label commandStatusLabel;
     SensorBar rmsBar;
     SensorBar peakBar;
     SensorBar silenceRatioBar;

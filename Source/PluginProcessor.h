@@ -59,7 +59,11 @@ public:
     int getClipCount() const;
     float getSilenceRatio() const;
 
+    juce::AudioProcessorValueTreeState apvts;
+
 private:
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
     // 오디오 스레드에서 계산한 센서 값을 UI 스레드가 안전하게 읽을 수 있게 합니다.
     std::atomic<float> rmsDb { -100.0f };
     std::atomic<float> peakDb { -100.0f };

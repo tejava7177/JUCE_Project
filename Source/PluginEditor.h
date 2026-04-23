@@ -59,9 +59,12 @@ private:
     juce::Label crestFactorLabel;
     juce::Label clipCountLabel;
     juce::Label silenceRatioLabel;
+    juce::Label gainLabel;
+    juce::Slider gainSlider;
     SensorBar rmsBar;
     SensorBar peakBar;
     SensorBar silenceRatioBar;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> gainAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleGainPluginAudioProcessorEditor)
 };

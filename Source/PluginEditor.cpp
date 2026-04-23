@@ -88,7 +88,21 @@ SimpleGainPluginAudioProcessorEditor::SimpleGainPluginAudioProcessorEditor (Simp
     addAndMakeVisible (peakBar);
     addAndMakeVisible (silenceRatioBar);
 
-    setSize (420, 300);
+    gainLabel.setText ("Gain", juce::dontSendNotification);
+    gainLabel.setJustificationType (juce::Justification::centred);
+    addAndMakeVisible (gainLabel);
+
+    gainSlider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+    gainSlider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 20);
+    gainSlider.setTextValueSuffix (" dB");
+    addAndMakeVisible (gainSlider);
+
+    gainAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
+        audioProcessor.apvts,
+        "gain_db",
+        gainSlider);
+
+    setSize (420, 420);
     startTimerHz (20);
 }
 
@@ -124,6 +138,10 @@ void SimpleGainPluginAudioProcessorEditor::resized()
     clipCountLabel.setBounds (bounds.removeFromTop (28));
     silenceRatioLabel.setBounds (bounds.removeFromTop (28));
     silenceRatioBar.setBounds (bounds.removeFromTop (16));
+    bounds.removeFromTop (12);
+
+    gainLabel.setBounds (bounds.removeFromTop (24));
+    gainSlider.setBounds (bounds.removeFromTop (100).withSizeKeepingCentre (110, 100));
 }
 
 void SimpleGainPluginAudioProcessorEditor::timerCallback()

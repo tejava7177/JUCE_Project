@@ -21,11 +21,25 @@ SimpleGainPluginAudioProcessor::SimpleGainPluginAudioProcessor()
                      #endif
                        )
 #endif
+     , apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
 }
 
 SimpleGainPluginAudioProcessor::~SimpleGainPluginAudioProcessor()
 {
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout SimpleGainPluginAudioProcessor::createParameterLayout()
+{
+    std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameters;
+
+    parameters.push_back (std::make_unique<juce::AudioParameterFloat> (
+        "gain_db",
+        "Gain",
+        juce::NormalisableRange<float> (-24.0f, 24.0f, 0.1f),
+        0.0f));
+
+    return { parameters.begin(), parameters.end() };
 }
 
 float SimpleGainPluginAudioProcessor::getRmsDb() const          { return rmsDb.load(); }
@@ -153,6 +167,12 @@ void SimpleGainPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buf
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, numSamples);
 
+    auto gainDb = apvts.getRawParameterValue ("gain_db")->load();
+    auto gain = juce::Decibels::decibelsToGain (gainDb);
+
+    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+        buffer.applyGain (channel, 0, numSamples, gain);
+
     auto sumOfSquares = 0.0f;
     auto peak = 0.0f;
     auto clips = 0;
@@ -210,12 +230,19 @@ juce::AudioProcessorEditor* SimpleGainPluginAudioProcessor::createEditor()
 //==============================================================================
 void SimpleGainPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    juce::ignoreUnused (destData);
+    if (auto state = apvts.copyState(); auto xml = state.createXml())
+        copyXmlToBinary (*xml, destData);
 }
 
 void SimpleGainPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    juce::ignoreUnused (data, sizeInBytes);
+    if (auto xmlState = getXmlFromBinary (data, sizeInBytes))
+    {
+        auto state = juce::ValueTree::fromXml (*xmlState);
+
+        if (state.isValid())
+            apvts.replaceState (state);
+    }
 }
 
 //==============================================================================

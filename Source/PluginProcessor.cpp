@@ -45,6 +45,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout SimpleGainPluginAudioProcess
     return { parameters.begin(), parameters.end() };
 }
 
+float SimpleGainPluginAudioProcessor::getRmsLevelDb() const
+{
+    return rmsLevelDb.load();
+}
+
+float SimpleGainPluginAudioProcessor::getPeakLevelDb() const
+{
+    return peakLevelDb.load();
+}
+
 //==============================================================================
 const juce::String SimpleGainPluginAudioProcessor::getName() const
 {
@@ -174,6 +184,29 @@ void SimpleGainPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buf
         for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
             channelData[sample] *= gain;
     }
+
+    auto sumOfSquares = 0.0f;
+    auto peak = 0.0f;
+
+    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    {
+        auto* channelData = buffer.getReadPointer (channel);
+
+        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        {
+            auto sampleValue = channelData[sample];
+            auto absoluteSampleValue = std::abs (sampleValue);
+
+            sumOfSquares += sampleValue * sampleValue;
+            peak = juce::jmax (peak, absoluteSampleValue);
+        }
+    }
+
+    auto numberOfSamples = totalNumInputChannels * buffer.getNumSamples();
+    auto rms = numberOfSamples > 0 ? std::sqrt (sumOfSquares / static_cast<float> (numberOfSamples)) : 0.0f;
+
+    rmsLevelDb.store (juce::Decibels::gainToDecibels (rms, -60.0f));
+    peakLevelDb.store (juce::Decibels::gainToDecibels (peak, -60.0f));
 }
 
 //==============================================================================

@@ -14,6 +14,26 @@
 //==============================================================================
 /**
 */
+class SensorBar  : public juce::Component
+{
+public:
+    enum class Mode
+    {
+        Decibel,
+        Ratio
+    };
+
+    void setDecibelValue (float newValueDb);
+    void setRatioValue (float newRatio);
+    void setMode (Mode newMode);
+
+    void paint (juce::Graphics& g) override;
+
+private:
+    Mode mode { Mode::Decibel };
+    float value { 0.0f };
+};
+
 class SimpleGainPluginAudioProcessorEditor  : public juce::AudioProcessorEditor,
                                               private juce::Timer
 {
@@ -33,11 +53,15 @@ private:
     SimpleGainPluginAudioProcessor& audioProcessor;
     
     juce::Label titleLabel;
+    juce::Label statusLabel;
     juce::Label rmsLabel;
     juce::Label peakLabel;
     juce::Label crestFactorLabel;
     juce::Label clipCountLabel;
     juce::Label silenceRatioLabel;
+    SensorBar rmsBar;
+    SensorBar peakBar;
+    SensorBar silenceRatioBar;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleGainPluginAudioProcessorEditor)
 };

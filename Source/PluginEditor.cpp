@@ -13,8 +13,17 @@
 SimpleGainPluginAudioProcessorEditor::SimpleGainPluginAudioProcessorEditor (SimpleGainPluginAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
-    // Make sure that before the constructor has finished, you've set the
-    // editor's size to whatever you need it to be.
+    gainSlider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+    gainSlider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 20);
+    gainSlider.setTextValueSuffix (" dB");
+    addAndMakeVisible (gainSlider);
+
+    // SliderAttachment가 슬라이더와 APVTS 파라미터를 양방향으로 동기화합니다.
+    gainAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
+        audioProcessor.apvts,
+        "gain_db",
+        gainSlider);
+
     setSize (400, 300);
 }
 
@@ -25,16 +34,14 @@ SimpleGainPluginAudioProcessorEditor::~SimpleGainPluginAudioProcessorEditor()
 //==============================================================================
 void SimpleGainPluginAudioProcessorEditor::paint (juce::Graphics& g)
 {
-    // (Our component is opaque, so we must completely fill the background with a solid colour)
     g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
 
     g.setColour (juce::Colours::white);
     g.setFont (juce::FontOptions (15.0f));
-    g.drawFittedText ("Hello World!", getLocalBounds(), juce::Justification::centred, 1);
+    g.drawFittedText ("Gain", 0, 20, getWidth(), 24, juce::Justification::centred, 1);
 }
 
 void SimpleGainPluginAudioProcessorEditor::resized()
 {
-    // This is generally where you'll want to lay out the positions of any
-    // subcomponents in your editor..
+    gainSlider.setBounds (getLocalBounds().reduced (100, 60));
 }

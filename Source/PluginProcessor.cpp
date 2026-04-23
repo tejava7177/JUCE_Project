@@ -34,13 +34,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout SimpleGainPluginAudioProcess
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameters;
 
-    // gain 파라미터를 추가합니다.
+    // gain_db 파라미터를 추가합니다.
     // ID는 코드에서 사용할 내부 이름이고, "Gain"은 호스트/UI에 보일 이름입니다.
     parameters.push_back (std::make_unique<juce::AudioParameterFloat> (
-        "gain",
+        "gain_db",
         "Gain",
-        juce::NormalisableRange<float> (0.0f, 2.0f, 0.01f),
-        1.0f));
+        juce::NormalisableRange<float> (-60.0f, 12.0f, 0.1f),
+        0.0f));
 
     return { parameters.begin(), parameters.end() };
 }
@@ -153,8 +153,9 @@ void SimpleGainPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buf
 
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
-    // 오디오 스레드에서 현재 gain 값을 읽습니다.
-    auto gain = apvts.getRawParameterValue ("gain")->load();
+    // 오디오 스레드에서 현재 gain_db 값을 읽고, 실제 곱셈에 사용할 선형 gain으로 바꿉니다.
+    auto gainDb = apvts.getRawParameterValue ("gain_db")->load();
+    auto gain = juce::Decibels::decibelsToGain (gainDb);
 
     // In case we have more outputs than inputs, this code clears any output
     // channels that didn't contain input data, (because these aren't

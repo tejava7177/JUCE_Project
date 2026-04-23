@@ -32,10 +32,12 @@ private:
     // access the processor object that created it.
     SimpleGainPluginAudioProcessor& audioProcessor;
     
-    juce::Slider gainSlider;
+    juce::Label titleLabel;
     juce::Label rmsLabel;
     juce::Label peakLabel;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> gainAttachment;
+    juce::Label crestFactorLabel;
+    juce::Label clipCountLabel;
+    juce::Label silenceRatioLabel;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleGainPluginAudioProcessorEditor)
 };

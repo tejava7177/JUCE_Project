@@ -13,27 +13,18 @@
 SimpleGainPluginAudioProcessorEditor::SimpleGainPluginAudioProcessorEditor (SimpleGainPluginAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
-    gainSlider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    gainSlider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 80, 20);
-    gainSlider.setTextValueSuffix (" dB");
-    addAndMakeVisible (gainSlider);
+    titleLabel.setText ("Track Sensor", juce::dontSendNotification);
+    titleLabel.setJustificationType (juce::Justification::centred);
+    addAndMakeVisible (titleLabel);
 
-    rmsLabel.setJustificationType (juce::Justification::centred);
-    rmsLabel.setText ("RMS: -60.0 dB", juce::dontSendNotification);
-    addAndMakeVisible (rmsLabel);
+    for (auto* label : { &rmsLabel, &peakLabel, &crestFactorLabel, &clipCountLabel, &silenceRatioLabel })
+    {
+        label->setJustificationType (juce::Justification::centredLeft);
+        addAndMakeVisible (*label);
+    }
 
-    peakLabel.setJustificationType (juce::Justification::centred);
-    peakLabel.setText ("Peak: -60.0 dB", juce::dontSendNotification);
-    addAndMakeVisible (peakLabel);
-
-    // SliderAttachment가 슬라이더와 APVTS 파라미터를 양방향으로 동기화합니다.
-    gainAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
-        audioProcessor.apvts,
-        "gain_db",
-        gainSlider);
-
-    setSize (400, 300);
-    startTimerHz (30);
+    setSize (360, 220);
+    startTimerHz (20);
 }
 
 SimpleGainPluginAudioProcessorEditor::~SimpleGainPluginAudioProcessorEditor()
@@ -46,28 +37,43 @@ void SimpleGainPluginAudioProcessorEditor::paint (juce::Graphics& g)
     g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
 
     g.setColour (juce::Colours::white);
-    g.setFont (juce::FontOptions (15.0f));
-    g.drawFittedText ("Gain", 0, 20, getWidth(), 24, juce::Justification::centred, 1);
 }
 
 void SimpleGainPluginAudioProcessorEditor::resized()
 {
-    auto bounds = getLocalBounds().reduced (40);
+    auto bounds = getLocalBounds().reduced (20);
 
-    gainSlider.setBounds (bounds.removeFromTop (160).reduced (60, 0));
-    rmsLabel.setBounds (bounds.removeFromTop (30));
-    peakLabel.setBounds (bounds.removeFromTop (30));
+    titleLabel.setBounds (bounds.removeFromTop (32));
+    rmsLabel.setBounds (bounds.removeFromTop (28));
+    peakLabel.setBounds (bounds.removeFromTop (28));
+    crestFactorLabel.setBounds (bounds.removeFromTop (28));
+    clipCountLabel.setBounds (bounds.removeFromTop (28));
+    silenceRatioLabel.setBounds (bounds.removeFromTop (28));
 }
 
 void SimpleGainPluginAudioProcessorEditor::timerCallback()
 {
-    rmsLabel.setText ("RMS: "
-                          + juce::String (audioProcessor.getRmsLevelDb(), 1)
+    rmsLabel.setText ("RMS Level: "
+                          + juce::String (audioProcessor.getRmsDb(), 1)
                           + " dB",
                       juce::dontSendNotification);
 
-    peakLabel.setText ("Peak: "
-                           + juce::String (audioProcessor.getPeakLevelDb(), 1)
+    peakLabel.setText ("Peak Level: "
+                           + juce::String (audioProcessor.getPeakDb(), 1)
                            + " dB",
                        juce::dontSendNotification);
+
+    crestFactorLabel.setText ("Crest Factor: "
+                                  + juce::String (audioProcessor.getCrestFactorDb(), 1)
+                                  + " dB",
+                              juce::dontSendNotification);
+
+    clipCountLabel.setText ("Clip Count: "
+                                + juce::String (audioProcessor.getClipCount()),
+                            juce::dontSendNotification);
+
+    silenceRatioLabel.setText ("Silence Ratio: "
+                                   + juce::String (audioProcessor.getSilenceRatio() * 100.0f, 1)
+                                   + " %",
+                               juce::dontSendNotification);
 }

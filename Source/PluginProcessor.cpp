@@ -21,8 +21,6 @@ SimpleGainPluginAudioProcessor::SimpleGainPluginAudioProcessor()
                      #endif
                        )
 #endif
-     // APVTS를 생성하면서 이 프로세서의 파라미터 레이아웃도 함께 등록합니다.
-     , apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
 }
 
@@ -30,30 +28,11 @@ SimpleGainPluginAudioProcessor::~SimpleGainPluginAudioProcessor()
 {
 }
 
-juce::AudioProcessorValueTreeState::ParameterLayout SimpleGainPluginAudioProcessor::createParameterLayout()
-{
-    std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameters;
-
-    // gain_db 파라미터를 추가합니다.
-    // ID는 코드에서 사용할 내부 이름이고, "Gain"은 호스트/UI에 보일 이름입니다.
-    parameters.push_back (std::make_unique<juce::AudioParameterFloat> (
-        "gain_db",
-        "Gain",
-        juce::NormalisableRange<float> (-60.0f, 12.0f, 0.1f),
-        0.0f));
-
-    return { parameters.begin(), parameters.end() };
-}
-
-float SimpleGainPluginAudioProcessor::getRmsLevelDb() const
-{
-    return rmsLevelDb.load();
-}
-
-float SimpleGainPluginAudioProcessor::getPeakLevelDb() const
-{
-    return peakLevelDb.load();
-}
+float SimpleGainPluginAudioProcessor::getRmsDb() const          { return rmsDb.load(); }
+float SimpleGainPluginAudioProcessor::getPeakDb() const         { return peakDb.load(); }
+float SimpleGainPluginAudioProcessor::getCrestFactorDb() const  { return crestFactorDb.load(); }
+int SimpleGainPluginAudioProcessor::getClipCount() const        { return clipCount.load(); }
+float SimpleGainPluginAudioProcessor::getSilenceRatio() const   { return silenceRatio.load(); }
 
 //==============================================================================
 const juce::String SimpleGainPluginAudioProcessor::getName() const
@@ -163,9 +142,7 @@ void SimpleGainPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buf
 
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
-    // 오디오 스레드에서 현재 gain_db 값을 읽고, 실제 곱셈에 사용할 선형 gain으로 바꿉니다.
-    auto gainDb = apvts.getRawParameterValue ("gain_db")->load();
-    auto gain = juce::Decibels::decibelsToGain (gainDb);
+    auto numSamples = buffer.getNumSamples();
 
     // In case we have more outputs than inputs, this code clears any output
     // channels that didn't contain input data, (because these aren't
@@ -174,39 +151,49 @@ void SimpleGainPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buf
     // when they first compile a plugin, but obviously you don't need to keep
     // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
-
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    {
-        auto* channelData = buffer.getWritePointer (channel);
-
-        // 각 샘플에 gain을 곱해서 실제 볼륨 변화를 만듭니다.
-        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
-            channelData[sample] *= gain;
-    }
+        buffer.clear (i, 0, numSamples);
 
     auto sumOfSquares = 0.0f;
     auto peak = 0.0f;
+    auto clips = 0;
+    auto silentSamples = 0;
+
+    constexpr auto clipThreshold = 1.0f;
+    constexpr auto silenceThreshold = 0.001f;
 
     for (int channel = 0; channel < totalNumInputChannels; ++channel)
     {
         auto* channelData = buffer.getReadPointer (channel);
 
-        for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+        for (int sample = 0; sample < numSamples; ++sample)
         {
             auto sampleValue = channelData[sample];
             auto absoluteSampleValue = std::abs (sampleValue);
 
             sumOfSquares += sampleValue * sampleValue;
             peak = juce::jmax (peak, absoluteSampleValue);
+
+            if (absoluteSampleValue >= clipThreshold)
+                ++clips;
+
+            if (absoluteSampleValue < silenceThreshold)
+                ++silentSamples;
         }
     }
 
-    auto numberOfSamples = totalNumInputChannels * buffer.getNumSamples();
+    auto numberOfSamples = totalNumInputChannels * numSamples;
     auto rms = numberOfSamples > 0 ? std::sqrt (sumOfSquares / static_cast<float> (numberOfSamples)) : 0.0f;
+    auto newRmsDb = juce::Decibels::gainToDecibels (rms, -100.0f);
+    auto newPeakDb = juce::Decibels::gainToDecibels (peak, -100.0f);
+    auto newSilenceRatio = numberOfSamples > 0
+        ? static_cast<float> (silentSamples) / static_cast<float> (numberOfSamples)
+        : 1.0f;
 
-    rmsLevelDb.store (juce::Decibels::gainToDecibels (rms, -60.0f));
-    peakLevelDb.store (juce::Decibels::gainToDecibels (peak, -60.0f));
+    rmsDb.store (newRmsDb);
+    peakDb.store (newPeakDb);
+    crestFactorDb.store (newPeakDb - newRmsDb);
+    clipCount.store (clips);
+    silenceRatio.store (newSilenceRatio);
 }
 
 //==============================================================================
@@ -223,22 +210,12 @@ juce::AudioProcessorEditor* SimpleGainPluginAudioProcessor::createEditor()
 //==============================================================================
 void SimpleGainPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // 현재 파라미터 상태를 저장해서,
-    // DAW 프로젝트를 다시 열었을 때 같은 값으로 복원할 수 있게 합니다.
-    if (auto state = apvts.copyState(); auto xml = state.createXml())
-        copyXmlToBinary (*xml, destData);
+    juce::ignoreUnused (destData);
 }
 
 void SimpleGainPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // 저장해 둔 파라미터 상태를 다시 읽어서 복원합니다.
-    if (auto xmlState = getXmlFromBinary (data, sizeInBytes))
-    {
-        auto state = juce::ValueTree::fromXml (*xmlState);
-
-        if (state.isValid())
-            apvts.replaceState (state);
-    }
+    juce::ignoreUnused (data, sizeInBytes);
 }
 
 //==============================================================================

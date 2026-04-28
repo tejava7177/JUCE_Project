@@ -48,6 +48,9 @@ public:
 private:
     void timerCallback() override;
     void handleApplyCommand();
+    void handleSendPrompt();
+    void setPromptStatus (const juce::String& newStatus, juce::Colour colour = juce::Colours::white);
+    void setPromptExplanation (const juce::String& newExplanation);
 
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
@@ -65,10 +68,16 @@ private:
     juce::TextEditor commandEditor;
     juce::TextButton applyButton;
     juce::Label commandStatusLabel;
+    juce::Label promptLabel;
+    juce::TextEditor promptEditor;
+    juce::TextButton sendButton;
+    juce::Label promptStatusLabel;
+    juce::Label promptExplanationLabel;
     SensorBar rmsBar;
     SensorBar peakBar;
     SensorBar silenceRatioBar;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> gainAttachment;
+    std::atomic<bool> promptRequestInFlight { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleGainPluginAudioProcessorEditor)
 };

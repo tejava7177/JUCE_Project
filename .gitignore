@@ -1,0 +1,30 @@
+# macOS
+**/.DS_Store
+
+# JUCE auto-generated
+**/Builds/
+**/JuceLibraryCode/
+
+# Xcode / macOS build
+**/build/
+**/DerivedData/
+**/*.xcworkspace
+**/xcuserdata/
+**/*.xcuserstate
+
+# Plugin binaries
+**/*.component
+**/*.vst3
+**/*.app
+**/*.dylib
+
+# IDE
+**/.vscode/
+**/.idea/
+
+# Logs
+**/*.log
+
+# Temp
+**/*.tmp
+**/*.swp

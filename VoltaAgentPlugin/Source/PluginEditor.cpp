@@ -10,9 +10,9 @@ VoltaAgentPluginAudioProcessorEditor::VoltaAgentPluginAudioProcessorEditor (Volt
       controllerView (audioProcessor),
       debugPanel (audioProcessor)
 {
-    setSize (980, 700);
+    setSize (1180, 820);
 
-    titleLabel.setText ("Central Mix Session Panel", juce::dontSendNotification);
+    titleLabel.setText ("Volta AI Mixing Assistant", juce::dontSendNotification);
     titleLabel.setJustificationType (juce::Justification::centredLeft);
     titleLabel.setFont (juce::FontOptions (20.0f, juce::Font::bold));
 

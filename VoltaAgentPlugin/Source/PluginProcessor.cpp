@@ -375,8 +375,17 @@ juce::String VoltaAgentPluginAudioProcessor::formatTrackListText (const SessionS
     juce::StringArray lines;
 
     for (const auto& track : summaryState.tracks)
-        lines.add ("- " + track.trackName + " | devices " + juce::String (track.deviceCount)
-                   + " | supported params " + juce::String (track.supportedParameterCount));
+    {
+        auto line = "- " + track.trackName;
+
+        if (track.trackLengthDisplay.isNotEmpty())
+            line += " | length " + track.trackLengthDisplay;
+
+        line += " | devices " + juce::String (track.deviceCount)
+             + " | supported params " + juce::String (track.supportedParameterCount);
+
+        lines.add (line);
+    }
 
     return lines.joinIntoString ("\n");
 }

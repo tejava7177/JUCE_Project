@@ -17,6 +17,8 @@ struct SessionTrackInfo
     juce::String trackName;
     int deviceCount = 0;
     int supportedParameterCount = 0;
+    double trackLengthSeconds = 0.0;
+    juce::String trackLengthDisplay;
 };
 
 struct SessionOperation
@@ -248,6 +250,8 @@ private:
                         trackInfo.trackName = trackObject->getProperty ("track_name").toString();
                         trackInfo.deviceCount = static_cast<int> (trackObject->getProperty ("device_count"));
                         trackInfo.supportedParameterCount = static_cast<int> (trackObject->getProperty ("supported_parameter_count"));
+                        trackInfo.trackLengthSeconds = static_cast<double> (trackObject->getProperty ("track_length_seconds"));
+                        trackInfo.trackLengthDisplay = trackObject->getProperty ("track_length_display").toString();
                         response.tracks.add (trackInfo);
                     }
                 }

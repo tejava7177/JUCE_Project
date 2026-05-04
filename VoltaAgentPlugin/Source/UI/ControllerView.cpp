@@ -1,57 +1,68 @@
 #include "ControllerView.h"
 #include "../PluginProcessor.h"
 
+namespace
+{
+void configureReadOnlyArea (juce::TextEditor& editor)
+{
+    editor.setMultiLine (true);
+    editor.setReadOnly (true);
+    editor.setScrollbarsShown (true);
+    editor.setCaretVisible (false);
+}
+}
+
 ControllerView::ControllerView (VoltaAgentPluginAudioProcessor& processor)
     : audioProcessor (processor)
 {
-    commandLabel.setText ("Command", juce::dontSendNotification);
-    agentsLabel.setText ("Connected Agents", juce::dontSendNotification);
-    commandStatusTitle.setText ("Last Request", juce::dontSendNotification);
-    analyzeStatusTitle.setText ("Analyze Status", juce::dontSendNotification);
-    analyzeSummaryTitle.setText ("Summary", juce::dontSendNotification);
-    analyzeSuggestionsTitle.setText ("Suggestions", juce::dontSendNotification);
+    sessionStatusTitle.setText ("Session", juce::dontSendNotification);
+    tracksTitle.setText ("Tracks", juce::dontSendNotification);
+    promptTitle.setText ("AI Prompt", juce::dontSendNotification);
+    explanationTitle.setText ("Explanation", juce::dontSendNotification);
+    activityTitle.setText ("Activity Log", juce::dontSendNotification);
+    plannedChangesTitle.setText ("Planned Changes", juce::dontSendNotification);
 
-    commandEditor.setMultiLine (true);
-    commandEditor.setReturnKeyStartsNewLine (true);
-    commandEditor.setText ("Make vocal clearer and bass less muddy", juce::dontSendNotification);
+    sessionStatusTitle.setJustificationType (juce::Justification::centredLeft);
+    sessionStatusLabel.setJustificationType (juce::Justification::centredLeft);
 
-    agentsList.setMultiLine (true);
-    agentsList.setReadOnly (true);
-    agentsList.setScrollbarsShown (true);
+    promptEditor.setMultiLine (true);
+    promptEditor.setReturnKeyStartsNewLine (true);
+    promptEditor.addListener (this);
 
-    analyzeSummaryValue.setMultiLine (true);
-    analyzeSummaryValue.setReadOnly (true);
-    analyzeSummaryValue.setScrollbarsShown (true);
+    configureReadOnlyArea (tracksList);
+    configureReadOnlyArea (explanationValue);
+    configureReadOnlyArea (activityLogValue);
+    configureReadOnlyArea (plannedChangesValue);
 
-    analyzeSuggestionsValue.setMultiLine (true);
-    analyzeSuggestionsValue.setReadOnly (true);
-    analyzeSuggestionsValue.setScrollbarsShown (true);
+    refreshSessionButton.addListener (this);
+    planButton.addListener (this);
+    applyButton.addListener (this);
 
-    sendButton.addListener (this);
-    analyzeButton.addListener (this);
-
-    addAndMakeVisible (commandLabel);
-    addAndMakeVisible (commandEditor);
-    addAndMakeVisible (sendButton);
-    addAndMakeVisible (analyzeButton);
-    addAndMakeVisible (agentsLabel);
-    addAndMakeVisible (agentsList);
-    addAndMakeVisible (commandStatusTitle);
-    addAndMakeVisible (commandStatusValue);
-    addAndMakeVisible (analyzeStatusTitle);
-    addAndMakeVisible (analyzeStatusValue);
-    addAndMakeVisible (analyzeSummaryTitle);
-    addAndMakeVisible (analyzeSummaryValue);
-    addAndMakeVisible (analyzeSuggestionsTitle);
-    addAndMakeVisible (analyzeSuggestionsValue);
+    addAndMakeVisible (sessionStatusTitle);
+    addAndMakeVisible (sessionStatusLabel);
+    addAndMakeVisible (refreshSessionButton);
+    addAndMakeVisible (tracksTitle);
+    addAndMakeVisible (tracksList);
+    addAndMakeVisible (promptTitle);
+    addAndMakeVisible (promptEditor);
+    addAndMakeVisible (planButton);
+    addAndMakeVisible (applyButton);
+    addAndMakeVisible (explanationTitle);
+    addAndMakeVisible (explanationValue);
+    addAndMakeVisible (activityTitle);
+    addAndMakeVisible (activityLogValue);
+    addAndMakeVisible (plannedChangesTitle);
+    addAndMakeVisible (plannedChangesValue);
 
     refreshState();
 }
 
 ControllerView::~ControllerView()
 {
-    sendButton.removeListener (this);
-    analyzeButton.removeListener (this);
+    refreshSessionButton.removeListener (this);
+    planButton.removeListener (this);
+    applyButton.removeListener (this);
+    promptEditor.removeListener (this);
 }
 
 void ControllerView::paint (juce::Graphics& g)
@@ -66,50 +77,77 @@ void ControllerView::paint (juce::Graphics& g)
 void ControllerView::resized()
 {
     auto area = getLocalBounds().reduced (16);
-    commandLabel.setBounds (area.removeFromTop (20));
-    commandEditor.setBounds (area.removeFromTop (64));
-    area.removeFromTop (10);
-    auto buttonRow = area.removeFromTop (30);
-    sendButton.setBounds (buttonRow.removeFromLeft (140));
-    buttonRow.removeFromLeft (10);
-    analyzeButton.setBounds (buttonRow.removeFromLeft (140));
+    auto topRow = area.removeFromTop (32);
+    sessionStatusTitle.setBounds (topRow.removeFromLeft (64));
+    sessionStatusLabel.setBounds (topRow.removeFromLeft (356));
+    refreshSessionButton.setBounds (topRow.removeFromRight (160));
+
     area.removeFromTop (14);
-    commandStatusTitle.setBounds (area.removeFromTop (20));
-    commandStatusValue.setBounds (area.removeFromTop (24));
-    area.removeFromTop (10);
-    analyzeStatusTitle.setBounds (area.removeFromTop (20));
-    analyzeStatusValue.setBounds (area.removeFromTop (24));
-    area.removeFromTop (10);
-    analyzeSummaryTitle.setBounds (area.removeFromTop (20));
-    analyzeSummaryValue.setBounds (area.removeFromTop (48));
-    area.removeFromTop (10);
-    analyzeSuggestionsTitle.setBounds (area.removeFromTop (20));
-    analyzeSuggestionsValue.setBounds (area.removeFromTop (96));
-    area.removeFromTop (10);
-    agentsLabel.setBounds (area.removeFromTop (20));
-    agentsList.setBounds (area);
+
+    auto leftColumn = area.removeFromLeft (290);
+    auto rightColumn = area;
+
+    tracksTitle.setBounds (leftColumn.removeFromTop (20));
+    tracksList.setBounds (leftColumn.removeFromTop (220));
+    leftColumn.removeFromTop (14);
+    activityTitle.setBounds (leftColumn.removeFromTop (20));
+    activityLogValue.setBounds (leftColumn);
+
+    promptTitle.setBounds (rightColumn.removeFromTop (20));
+    promptEditor.setBounds (rightColumn.removeFromTop (72));
+    rightColumn.removeFromTop (10);
+
+    auto buttonRow = rightColumn.removeFromTop (30);
+    planButton.setBounds (buttonRow.removeFromLeft (120));
+    buttonRow.removeFromLeft (10);
+    applyButton.setBounds (buttonRow.removeFromLeft (120));
+
+    rightColumn.removeFromTop (14);
+    explanationTitle.setBounds (rightColumn.removeFromTop (20));
+    explanationValue.setBounds (rightColumn.removeFromTop (80));
+    rightColumn.removeFromTop (14);
+    plannedChangesTitle.setBounds (rightColumn.removeFromTop (20));
+    plannedChangesValue.setBounds (rightColumn);
 }
 
 void ControllerView::refreshState()
 {
-    commandStatusValue.setText (audioProcessor.getLastCommandText(), juce::dontSendNotification);
-    analyzeStatusValue.setText (audioProcessor.getAnalyzeStatusText(), juce::dontSendNotification);
-    analyzeSummaryValue.setText (audioProcessor.getAnalyzeSummaryText(), juce::dontSendNotification);
-    analyzeSuggestionsValue.setText (audioProcessor.getAnalyzeSuggestionsText(), juce::dontSendNotification);
-    analyzeButton.setEnabled (! audioProcessor.isAnalyzeRequestInFlight());
-    agentsList.setText (audioProcessor.getConnectedAgentsSummary(), juce::dontSendNotification);
+    sessionStatusLabel.setText (audioProcessor.getSessionStatusText(), juce::dontSendNotification);
+    tracksList.setText (audioProcessor.getTrackListText(), juce::dontSendNotification);
+    explanationValue.setText (audioProcessor.getExplanationText(), juce::dontSendNotification);
+    plannedChangesValue.setText (audioProcessor.getPlannedChangesText(), juce::dontSendNotification);
+    activityLogValue.setText (audioProcessor.getActivityLogText(), juce::dontSendNotification);
+
+    if (promptEditor.getText() != audioProcessor.getPromptText())
+        promptEditor.setText (audioProcessor.getPromptText(), juce::dontSendNotification);
+
+    auto busy = audioProcessor.isRequestInFlight();
+    refreshSessionButton.setEnabled (! busy);
+    planButton.setEnabled (! busy);
+    applyButton.setEnabled (! busy && audioProcessor.canApplyPlan());
 }
 
 void ControllerView::buttonClicked (juce::Button* button)
 {
-    if (button == &sendButton)
+    if (button == &refreshSessionButton)
     {
-        audioProcessor.submitControllerCommand (commandEditor.getText());
-        refreshState();
+        audioProcessor.refreshSession();
     }
-    else if (button == &analyzeButton)
+    else if (button == &planButton)
     {
-        audioProcessor.requestMixAnalysis();
-        refreshState();
+        audioProcessor.setCurrentPrompt (promptEditor.getText());
+        audioProcessor.planActions();
     }
+    else if (button == &applyButton)
+    {
+        audioProcessor.applyPlannedActions();
+    }
+
+    refreshState();
+}
+
+void ControllerView::textEditorTextChanged (juce::TextEditor& editor)
+{
+    if (&editor == &promptEditor)
+        audioProcessor.setCurrentPrompt (promptEditor.getText());
 }

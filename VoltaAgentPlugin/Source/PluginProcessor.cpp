@@ -3,14 +3,7 @@
 
 namespace
 {
-constexpr auto agentIdProperty = "agentId";
 constexpr auto serverEndpointProperty = "serverEndpoint";
-constexpr auto pollingEnabledProperty = "pollingEnabled";
-
-juce::String toTrackTypeSlug (const juce::String& trackRoleText)
-{
-    return trackRoleText.toLowerCase().replaceCharacter (' ', '_');
-}
 }
 
 VoltaAgentPluginAudioProcessor::VoltaAgentPluginAudioProcessor()
@@ -25,98 +18,26 @@ VoltaAgentPluginAudioProcessor::VoltaAgentPluginAudioProcessor()
                         )
 #endif
     , apvts (*this, nullptr, "Parameters", createParameterLayout())
-    , trackAgent (apvts)
 {
-    if (! apvts.state.hasProperty (agentIdProperty))
-        apvts.state.setProperty (agentIdProperty, "agent_01", nullptr);
-
     if (! apvts.state.hasProperty (serverEndpointProperty))
-        apvts.state.setProperty (serverEndpointProperty, "http://127.0.0.1:5000/command", nullptr);
+        apvts.state.setProperty (serverEndpointProperty, "http://127.0.0.1:5000", nullptr);
 
-    if (! apvts.state.hasProperty (pollingEnabledProperty))
-        apvts.state.setProperty (pollingEnabledProperty, true, nullptr);
-
-    apvts.addParameterListener ("plugin_mode", this);
-
-    localJsonClient.setCommandHandler ([this] (const volta::MixCommand& command)
+    sessionControlClient.setResultHandler ([this] (const volta::SessionControlResponse& response)
     {
-        enqueueIncomingCommand (command);
+        handleSessionControlResponse (response);
     });
 
-    localJsonClient.setPollStatusHandler ([this] (bool succeeded, const juce::String& response)
-    {
-        if (succeeded)
-        {
-            lastSuccessfulPollTimeMs.store (juce::Time::currentTimeMillis());
-
-            if (response.isNotEmpty())
-            {
-                const juce::ScopedLock scopedLock (statusLock);
-                lastCommandText = response;
-            }
-        }
-    });
-
-    mixAnalyzeClient.setResultHandler ([this] (const volta::MixAnalyzeResult& result)
-    {
-        handleMixAnalyzeResult (result);
-    });
-
-    refreshPollingConfiguration();
-    localJsonClient.startPolling();
+    requestServerHealth();
 }
 
 VoltaAgentPluginAudioProcessor::~VoltaAgentPluginAudioProcessor()
 {
-    localJsonClient.stopPolling();
-    mixAnalyzeClient.stop();
-    apvts.removeParameterListener ("plugin_mode", this);
+    sessionControlClient.stop();
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout VoltaAgentPluginAudioProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameters;
-
-    parameters.push_back (std::make_unique<juce::AudioParameterChoice> (
-        "plugin_mode",
-        "Mode",
-        juce::StringArray { "Agent", "Controller" },
-        0));
-
-    parameters.push_back (std::make_unique<juce::AudioParameterChoice> (
-        "track_role",
-        "Track Type",
-        volta::getTrackRoleNames(),
-        0));
-
-    parameters.push_back (std::make_unique<juce::AudioParameterFloat> (
-        "gain_db",
-        "Volume",
-        juce::NormalisableRange<float> (-24.0f, 12.0f, 0.1f),
-        0.0f));
-
-    parameters.push_back (std::make_unique<juce::AudioParameterBool> ("low_cut_enabled", "Low Cut Enabled", false));
-    parameters.push_back (std::make_unique<juce::AudioParameterFloat> (
-        "low_cut_freq_hz",
-        "Low Cut Frequency",
-        juce::NormalisableRange<float> (20.0f, 300.0f, 1.0f, 0.35f),
-        80.0f));
-    parameters.push_back (std::make_unique<juce::AudioParameterFloat> (
-        "presence_db",
-        "Presence",
-        juce::NormalisableRange<float> (-6.0f, 6.0f, 0.1f),
-        0.0f));
-    parameters.push_back (std::make_unique<juce::AudioParameterFloat> (
-        "compression_amount",
-        "Compression",
-        juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),
-        0.0f));
-    parameters.push_back (std::make_unique<juce::AudioParameterFloat> (
-        "warmth_amount",
-        "Warmth",
-        juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),
-        0.0f));
-
     return { parameters.begin(), parameters.end() };
 }
 
@@ -185,8 +106,7 @@ void VoltaAgentPluginAudioProcessor::changeProgramName (int index, const juce::S
 
 void VoltaAgentPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    currentSampleRate.store (sampleRate);
-    juce::ignoreUnused (samplesPerBlock);
+    juce::ignoreUnused (sampleRate, samplesPerBlock);
 }
 
 void VoltaAgentPluginAudioProcessor::releaseResources()
@@ -225,12 +145,6 @@ void VoltaAgentPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buf
 
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, numSamples);
-
-    auto gainDb = apvts.getRawParameterValue ("gain_db")->load();
-    auto linearGain = juce::Decibels::decibelsToGain (gainDb);
-
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-        buffer.applyGain (channel, 0, numSamples, linearGain);
 }
 
 bool VoltaAgentPluginAudioProcessor::hasEditor() const
@@ -258,279 +172,427 @@ void VoltaAgentPluginAudioProcessor::setStateInformation (const void* data, int 
         if (state.isValid())
             apvts.replaceState (state);
     }
-
-    refreshPollingConfiguration();
-}
-
-volta::AgentState VoltaAgentPluginAudioProcessor::getAgentState() const
-{
-    return trackAgent.captureState();
-}
-
-void VoltaAgentPluginAudioProcessor::setAgentId (const juce::String& newAgentId)
-{
-    apvts.state.setProperty (agentIdProperty, newAgentId.trim(), nullptr);
-    refreshPollingConfiguration();
 }
 
 void VoltaAgentPluginAudioProcessor::setServerEndpoint (const juce::String& newServerEndpoint)
 {
-    apvts.state.setProperty (serverEndpointProperty, newServerEndpoint.trim(), nullptr);
-    refreshPollingConfiguration();
+    apvts.state.setProperty (serverEndpointProperty, buildServerBaseUrl (newServerEndpoint), nullptr);
 }
 
-void VoltaAgentPluginAudioProcessor::setPollingEnabled (bool shouldPoll)
+juce::String VoltaAgentPluginAudioProcessor::getServerEndpointText() const
 {
-    apvts.state.setProperty (pollingEnabledProperty, shouldPoll, nullptr);
-    refreshPollingConfiguration();
+    return apvts.state.getProperty (serverEndpointProperty, "http://127.0.0.1:5000").toString();
 }
 
-void VoltaAgentPluginAudioProcessor::refreshPollingConfiguration()
-{
-    auto state = getAgentState();
-    auto shouldPoll = state.mode == volta::PluginMode::agent && state.pollingEnabled;
-    localJsonClient.configure (state.serverEndpoint, state.agentId, shouldPoll);
-}
-
-juce::String VoltaAgentPluginAudioProcessor::getTrackRoleText() const
-{
-    return volta::getTrackRoleName (getAgentState().trackRoleIndex);
-}
-
-juce::String VoltaAgentPluginAudioProcessor::getConnectionStatusText() const
-{
-    auto state = getAgentState();
-
-    if (state.mode == volta::PluginMode::controller)
-        return "Controller Mode";
-
-    if (! state.pollingEnabled)
-        return "Polling Disabled";
-
-    auto nowMs = juce::Time::currentTimeMillis();
-    auto lastSeenMs = lastSuccessfulPollTimeMs.load();
-    return (lastSeenMs > 0 && nowMs - lastSeenMs < 2500) ? "Connected" : "Offline";
-}
-
-juce::String VoltaAgentPluginAudioProcessor::getLastCommandText() const
+juce::String VoltaAgentPluginAudioProcessor::getServerStatusText() const
 {
     const juce::ScopedLock scopedLock (statusLock);
-    return lastCommandText;
+    return getServerStateLabel (serverState, pendingApplyCount);
 }
 
-juce::String VoltaAgentPluginAudioProcessor::getLastAppliedText() const
+juce::String VoltaAgentPluginAudioProcessor::getSessionStatusText() const
 {
     const juce::ScopedLock scopedLock (statusLock);
-    return lastAppliedText;
+
+    if (planState == PlanState::refreshingSession)
+        return "Refreshing session...";
+
+    if (! sessionSummary.sessionLoaded)
+        return "No session loaded";
+
+    return "Session: " + juce::String (sessionSummary.trackCount) + " tracks loaded";
 }
 
-juce::String VoltaAgentPluginAudioProcessor::getConnectedAgentsSummary() const
+juce::String VoltaAgentPluginAudioProcessor::getPromptText() const
 {
     const juce::ScopedLock scopedLock (statusLock);
-    return connectedAgentsSummary;
+    return currentPrompt;
 }
 
-juce::String VoltaAgentPluginAudioProcessor::getAnalyzeStatusText() const
+juce::String VoltaAgentPluginAudioProcessor::getExplanationText() const
 {
     const juce::ScopedLock scopedLock (statusLock);
-    return analyzeStatusText;
+    return explanationText;
 }
 
-juce::String VoltaAgentPluginAudioProcessor::getAnalyzeSummaryText() const
+juce::String VoltaAgentPluginAudioProcessor::getTrackListText() const
 {
     const juce::ScopedLock scopedLock (statusLock);
-    return analyzeSummaryText;
+    return trackListText;
 }
 
-juce::String VoltaAgentPluginAudioProcessor::getAnalyzeSuggestionsText() const
+juce::String VoltaAgentPluginAudioProcessor::getPlannedChangesText() const
 {
     const juce::ScopedLock scopedLock (statusLock);
-    return analyzeSuggestionsText;
+    return plannedChangesText;
 }
 
-bool VoltaAgentPluginAudioProcessor::isAnalyzeRequestInFlight() const
+juce::String VoltaAgentPluginAudioProcessor::getActivityLogText() const
 {
-    return analyzeRequestInFlight.load();
+    const juce::ScopedLock scopedLock (statusLock);
+    return activityLogText;
 }
 
-void VoltaAgentPluginAudioProcessor::requestMixAnalysis()
+bool VoltaAgentPluginAudioProcessor::canApplyPlan() const
 {
-    auto state = getAgentState();
-    auto analyzeEndpoint = buildAnalyzeEndpointFromServerEndpoint (state.serverEndpoint);
-    auto requestBody = buildMixAnalyzeRequestBody();
+    const juce::ScopedLock scopedLock (statusLock);
+    return planState == PlanState::planReady && ! lastPlanOperations.isEmpty();
+}
+
+bool VoltaAgentPluginAudioProcessor::isRequestInFlight() const
+{
+    return requestInFlight.load();
+}
+
+void VoltaAgentPluginAudioProcessor::setCurrentPrompt (const juce::String& promptText)
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    currentPrompt = promptText;
+}
+
+void VoltaAgentPluginAudioProcessor::requestServerHealth()
+{
+    auto endpoint = buildSessionEndpoint (getServerEndpointText(), "/health");
 
     {
         const juce::ScopedLock scopedLock (statusLock);
-        analyzeRequestInFlight.store (true);
-        analyzeStatusText = "Analyzing...";
-        analyzeSummaryText = "Waiting for server response...";
-        analyzeSuggestionsText = "Request sent to " + analyzeEndpoint;
+        explanationText = "Connecting to server...";
+        appendActivityLog ("health request start | GET " + endpoint);
     }
 
-    mixAnalyzeClient.requestAnalysis (analyzeEndpoint, requestBody);
+    requestInFlight.store (true);
+    sessionControlClient.requestHealth (endpoint);
 }
 
-void VoltaAgentPluginAudioProcessor::submitControllerCommand (const juce::String& promptText)
+void VoltaAgentPluginAudioProcessor::refreshSession()
 {
-    const juce::ScopedLock scopedLock (statusLock);
-    lastCommandText = promptText.isNotEmpty() ? promptText : "Waiting for command...";
-    lastAppliedText = "Controller UI only. Command dispatch is not wired yet.";
+    auto endpoint = buildSessionEndpoint (getServerEndpointText(), "/session-summary");
+
+    {
+        const juce::ScopedLock scopedLock (statusLock);
+        planState = PlanState::refreshingSession;
+        explanationText = "Refreshing session...";
+        appendActivityLog ("session-summary request start | GET " + endpoint);
+    }
+
+    requestInFlight.store (true);
+    sessionControlClient.requestSessionSummary (endpoint);
 }
 
-juce::String VoltaAgentPluginAudioProcessor::buildAnalyzeEndpointFromServerEndpoint (const juce::String& serverEndpoint)
+void VoltaAgentPluginAudioProcessor::planActions()
+{
+    juce::String promptText;
+    juce::String endpoint;
+
+    {
+        const juce::ScopedLock scopedLock (statusLock);
+        promptText = currentPrompt.trim();
+
+        if (promptText.isEmpty())
+        {
+            planState = PlanState::error;
+            explanationText = "Planning failed";
+            appendActivityLog ("plan-actions request blocked | error=empty prompt");
+            return;
+        }
+
+        planState = PlanState::planning;
+        explanationText = "Planning changes...";
+        plannedChangesText = "Waiting for plan response...";
+        endpoint = buildSessionEndpoint (getServerEndpointText(), "/plan-actions");
+        appendActivityLog ("plan-actions request start | POST " + endpoint + " | prompt=" + promptText);
+    }
+
+    requestInFlight.store (true);
+    sessionControlClient.requestPlanActions (endpoint, promptText);
+}
+
+void VoltaAgentPluginAudioProcessor::applyPlannedActions()
+{
+    juce::Array<volta::SessionOperation> operationsToApply;
+    juce::String endpoint;
+
+    {
+        const juce::ScopedLock scopedLock (statusLock);
+
+        if (lastPlanOperations.isEmpty())
+        {
+            planState = PlanState::error;
+            explanationText = "Apply staging failed";
+            appendActivityLog ("apply-actions request blocked | error=no planned operations");
+            return;
+        }
+
+        planState = PlanState::stagingApply;
+        explanationText = "Staging apply...";
+        operationsToApply = lastPlanOperations;
+        endpoint = buildSessionEndpoint (getServerEndpointText(), "/apply-actions");
+        appendActivityLog ("apply-actions request start | POST " + endpoint
+                           + " | operations=" + juce::String (operationsToApply.size()));
+    }
+
+    requestInFlight.store (true);
+    sessionControlClient.requestApplyActions (endpoint, operationsToApply);
+}
+
+juce::String VoltaAgentPluginAudioProcessor::buildServerBaseUrl (const juce::String& serverEndpoint)
 {
     auto trimmed = serverEndpoint.trim();
 
     if (trimmed.isEmpty())
-        return "http://127.0.0.1:5000/api/mix/analyze";
+        return "http://127.0.0.1:5000";
 
-    if (trimmed.containsIgnoreCase ("/api/mix/analyze"))
-        return trimmed;
+    auto base = trimmed.upToFirstOccurrenceOf ("?", false, false);
 
-    auto endpointWithoutQuery = trimmed.upToFirstOccurrenceOf ("?", false, false);
-
-    for (auto suffix : { "/command", "/parse-juce-intent", "/parse-intent" })
+    if (base.startsWithIgnoreCase ("http://") || base.startsWithIgnoreCase ("https://"))
     {
-        if (endpointWithoutQuery.endsWithIgnoreCase (suffix))
-        {
-            endpointWithoutQuery = endpointWithoutQuery.dropLastCharacters (juce::String (suffix).length());
-            break;
-        }
+        auto schemeSeparator = base.indexOf ("://");
+        auto pathStart = base.indexOfChar (schemeSeparator + 3, '/');
+
+        if (pathStart > 0)
+            base = base.substring (0, pathStart);
     }
 
-    if (endpointWithoutQuery.endsWithChar ('/'))
-        endpointWithoutQuery = endpointWithoutQuery.dropLastCharacters (1);
+    if (base.endsWithChar ('/'))
+        base = base.dropLastCharacters (1);
 
-    return endpointWithoutQuery + "/api/mix/analyze";
+    return base;
 }
 
-juce::String VoltaAgentPluginAudioProcessor::buildMixAnalyzeRequestBody() const
+juce::String VoltaAgentPluginAudioProcessor::buildSessionEndpoint (const juce::String& serverEndpoint, const juce::String& pathSuffix)
 {
-    auto state = getAgentState();
-    auto requestObject = std::make_unique<juce::DynamicObject>();
-    requestObject->setProperty ("trackType", toTrackTypeSlug (getTrackRoleText()));
-    requestObject->setProperty ("sampleRate", currentSampleRate.load());
-    requestObject->setProperty ("bpm", 0);
-
-    auto featuresObject = std::make_unique<juce::DynamicObject>();
-    featuresObject->setProperty ("rms", -18.2);
-    featuresObject->setProperty ("peak", -6.1);
-    featuresObject->setProperty ("spectralCentroid", 1200);
-    requestObject->setProperty ("features", juce::var (featuresObject.release()));
-
-    auto currentParamsObject = std::make_unique<juce::DynamicObject>();
-    currentParamsObject->setProperty ("gain_db", state.gainDb);
-    currentParamsObject->setProperty ("low_cut_freq_hz", state.lowCutFrequencyHz);
-    currentParamsObject->setProperty ("presence_db", state.presenceDb);
-    currentParamsObject->setProperty ("compression_amount", state.compressionAmount);
-    currentParamsObject->setProperty ("warmth_amount", state.warmthAmount);
-    requestObject->setProperty ("currentParams", juce::var (currentParamsObject.release()));
-
-    return juce::JSON::toString (juce::var (requestObject.release()));
+    return buildServerBaseUrl (serverEndpoint) + pathSuffix;
 }
 
-void VoltaAgentPluginAudioProcessor::handleMixAnalyzeResult (const volta::MixAnalyzeResult& result)
+juce::String VoltaAgentPluginAudioProcessor::formatTrackListText (const SessionSummaryState& summaryState)
 {
-    juce::String suggestionsText;
+    if (! summaryState.sessionLoaded)
+        return "No session loaded.";
 
-    if (result.suggestions.isEmpty())
+    if (summaryState.tracks.isEmpty())
+        return "Session loaded, but no tracks were returned.";
+
+    juce::StringArray lines;
+
+    for (const auto& track : summaryState.tracks)
+        lines.add ("- " + track.trackName + " | devices " + juce::String (track.deviceCount)
+                   + " | supported params " + juce::String (track.supportedParameterCount));
+
+    return lines.joinIntoString ("\n");
+}
+
+juce::String VoltaAgentPluginAudioProcessor::formatOperationsText (const juce::Array<volta::SessionOperation>& operations)
+{
+    if (operations.isEmpty())
+        return "No planned changes yet.";
+
+    juce::StringArray lines;
+
+    for (const auto& operation : operations)
     {
-        suggestionsText = result.succeeded ? "No recognized suggestions returned." : "No suggestions available.";
+        lines.add (operation.track + " | "
+                  + operation.device + " | "
+                  + operation.parameter + " | "
+                  + juce::String (operation.oldValue, 2) + " -> "
+                  + juce::String (operation.newValue, 2)
+                  + " | path " + operation.path);
     }
-    else
+
+    return lines.joinIntoString ("\n");
+}
+
+juce::String VoltaAgentPluginAudioProcessor::sanitizeResponseForLog (const juce::String& responseText)
+{
+    auto flattened = responseText.replaceCharacters ("\r\n", "  ").trim();
+
+    if (flattened.length() > 240)
+        flattened = flattened.substring (0, 240) + "...";
+
+    return flattened.isEmpty() ? "<empty>" : flattened;
+}
+
+juce::String VoltaAgentPluginAudioProcessor::formatBool (bool value)
+{
+    return value ? "true" : "false";
+}
+
+juce::String VoltaAgentPluginAudioProcessor::getServerStateLabel (ServerState state, int pendingCount)
+{
+    switch (state)
     {
-        juce::StringArray lines;
-
-        for (const auto& suggestion : result.suggestions)
-        {
-            auto line = suggestion.parameter
-                        + " | "
-                        + suggestion.action
-                        + " | "
-                        + juce::String (suggestion.value, 2);
-
-            if (suggestion.unit.isNotEmpty())
-                line << " " << suggestion.unit;
-
-            if (suggestion.reason.isNotEmpty())
-                line << " | " << suggestion.reason;
-
-            lines.add (line);
-        }
-
-        suggestionsText = lines.joinIntoString ("\n");
+        case ServerState::offline:
+            return "Server offline";
+        case ServerState::connectedNoSession:
+            return "Server connected | No session loaded | Pending actions: " + juce::String (pendingCount);
+        case ServerState::connectedSessionLoaded:
+            return "Server connected | Pending actions: " + juce::String (pendingCount);
     }
+
+    return "Server offline";
+}
+
+void VoltaAgentPluginAudioProcessor::appendActivityLog (const juce::String& line)
+{
+    auto timestamp = juce::Time::getCurrentTime().formatted ("%H:%M:%S");
+
+    if (activityLogText.startsWith ("Connecting to server..."))
+        activityLogText.clear();
+
+    activityLogText = "[" + timestamp + "] " + line + (activityLogText.isEmpty() ? "" : "\n" + activityLogText);
+}
+
+void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::SessionControlResponse& response)
+{
+    bool shouldRefreshSession = false;
+    bool shouldRefreshHealth = false;
 
     {
         const juce::ScopedLock scopedLock (statusLock);
-        analyzeRequestInFlight.store (false);
+        requestInFlight.store (false);
 
-        if (result.succeeded)
+        auto parseSuccess = formatBool (response.parseSucceeded);
+        auto opsCount = juce::String (response.operations.size());
+        auto rawResponse = sanitizeResponseForLog (response.rawResponse);
+
+        switch (response.type)
         {
-            analyzeStatusText = "Analysis complete";
-            analyzeSummaryText = result.summary.isNotEmpty() ? result.summary : "Analysis succeeded without summary text.";
-            analyzeSuggestionsText = suggestionsText;
+            case volta::SessionRequestType::health:
+            {
+                if (response.succeeded)
+                {
+                    pendingApplyCount = response.pendingApplyCount;
+                    serverState = response.sessionLoaded ? ServerState::connectedSessionLoaded : ServerState::connectedNoSession;
+                    explanationText = response.sessionLoaded ? "Server connected" : "No session loaded";
+                    appendActivityLog ("health request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | pending=" + juce::String (pendingApplyCount)
+                                       + " | raw=" + rawResponse);
+                    shouldRefreshSession = response.sessionLoaded && sessionSummary.tracks.isEmpty();
+                }
+                else
+                {
+                    pendingApplyCount = 0;
+                    serverState = ServerState::offline;
+                    explanationText = "Server offline";
+                    appendActivityLog (juce::String ("health request end | Server offline")
+                                       + " | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | error=" + (response.errorMessage.isNotEmpty() ? response.errorMessage : "connection failed")
+                                       + " | raw=" + rawResponse);
+                }
+
+                break;
+            }
+
+            case volta::SessionRequestType::sessionSummary:
+            {
+                if (response.succeeded)
+                {
+                    sessionSummary.sessionLoaded = response.sessionLoaded;
+                    sessionSummary.trackCount = response.trackCount;
+                    sessionSummary.tracks = response.tracks;
+                    trackListText = formatTrackListText (sessionSummary);
+                    serverState = sessionSummary.sessionLoaded ? ServerState::connectedSessionLoaded : ServerState::connectedNoSession;
+                    planState = PlanState::idle;
+
+                    if (sessionSummary.sessionLoaded)
+                    {
+                        explanationText = "Server connected";
+                        appendActivityLog ("session-summary request end | http " + juce::String (response.statusCode)
+                                           + " | parse=" + parseSuccess
+                                           + " | tracks=" + juce::String (sessionSummary.trackCount)
+                                           + " | raw=" + rawResponse);
+                    }
+                    else
+                    {
+                        explanationText = "No session loaded";
+                        appendActivityLog ("session-summary request end | http " + juce::String (response.statusCode)
+                                           + " | parse=" + parseSuccess
+                                           + " | raw=" + rawResponse);
+                    }
+                }
+                else
+                {
+                    planState = PlanState::error;
+                    explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Invalid response from server";
+                    appendActivityLog ("session-summary request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | error=" + (response.errorMessage.isNotEmpty() ? response.errorMessage : "Invalid response from server")
+                                       + " | raw=" + rawResponse);
+                }
+
+                break;
+            }
+
+            case volta::SessionRequestType::planActions:
+            {
+                if (response.succeeded)
+                {
+                    lastPlanOperations = response.operations;
+                    explanationText = response.explanation.isNotEmpty() ? response.explanation : "Plan ready";
+                    plannedChangesText = formatOperationsText (lastPlanOperations);
+                    planState = PlanState::planReady;
+                    appendActivityLog ("plan-actions request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | operations=" + opsCount
+                                       + " | raw=" + rawResponse);
+                }
+                else
+                {
+                    lastPlanOperations.clear();
+                    plannedChangesText = "No planned changes available.";
+                    explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Planning failed";
+                    planState = PlanState::error;
+                    appendActivityLog ("plan-actions request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | error=" + (response.errorMessage.isNotEmpty() ? response.errorMessage : "Planning failed")
+                                       + " | operations=" + opsCount
+                                       + " | raw=" + rawResponse);
+                }
+
+                break;
+            }
+
+            case volta::SessionRequestType::applyActions:
+            {
+                if (response.succeeded)
+                {
+                    lastApplyRevision = response.revision;
+                    planState = PlanState::applyStaged;
+                    explanationText = "Apply staged";
+                    appendActivityLog ("apply-actions request end | Apply staged (revision " + juce::String (lastApplyRevision) + ")"
+                                       + " | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | operations=" + opsCount
+                                       + " | staged=" + juce::String (response.staged)
+                                       + " | raw=" + rawResponse);
+                    pendingApplyCount = juce::jmax (pendingApplyCount, response.staged);
+                    shouldRefreshHealth = true;
+                }
+                else
+                {
+                    planState = PlanState::error;
+                    explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Apply staging failed";
+                    appendActivityLog ("apply-actions request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | error=" + (response.errorMessage.isNotEmpty() ? response.errorMessage : "Apply staging failed")
+                                       + " | operations=" + juce::String (lastPlanOperations.size())
+                                       + " | raw=" + rawResponse);
+                }
+
+                break;
+            }
         }
-        else
-        {
-            analyzeStatusText = result.statusCode > 0
-                                    ? "Analysis failed (" + juce::String (result.statusCode) + ")"
-                                    : "Analysis failed";
-            analyzeSummaryText = result.errorMessage.isNotEmpty() ? result.errorMessage : "Unknown analysis error.";
-            analyzeSuggestionsText = result.rawResponse.isNotEmpty() ? result.rawResponse : suggestionsText;
-        }
     }
-}
 
-void VoltaAgentPluginAudioProcessor::parameterChanged (const juce::String& parameterID, float newValue)
-{
-    juce::ignoreUnused (newValue);
-
-    if (parameterID == "plugin_mode")
-        triggerAsyncUpdate();
-}
-
-void VoltaAgentPluginAudioProcessor::handleAsyncUpdate()
-{
-    std::optional<volta::MixCommand> commandToApply;
-
+    if (shouldRefreshSession)
     {
-        const juce::ScopedLock scopedLock (incomingCommandLock);
-        commandToApply = pendingCommand;
-        pendingCommand.reset();
+        refreshSession();
+        return;
     }
 
-    if (commandToApply.has_value())
-        applyIncomingCommand (*commandToApply);
-
-    refreshPollingConfiguration();
-}
-
-void VoltaAgentPluginAudioProcessor::enqueueIncomingCommand (const volta::MixCommand& command)
-{
-    {
-        const juce::ScopedLock scopedLock (incomingCommandLock);
-        pendingCommand = command;
-    }
-
-    triggerAsyncUpdate();
-}
-
-void VoltaAgentPluginAudioProcessor::applyIncomingCommand (const volta::MixCommand& command)
-{
-    auto state = getAgentState();
-
-    if (state.mode != volta::PluginMode::agent)
-        return;
-
-    if (command.targetAgent != state.agentId)
-        return;
-
-    trackAgent.applyCommand (command);
-
-    const juce::ScopedLock scopedLock (statusLock);
-    lastAppliedText = command.parameter + " -> " + juce::String (command.value, 2);
-    connectedAgentsSummary = state.agentId + " / " + getTrackRoleText() + " / " + getConnectionStatusText();
+    if (shouldRefreshHealth)
+        requestServerHealth();
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

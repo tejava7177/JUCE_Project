@@ -30,14 +30,6 @@ private:
     bool expanded = false;
 
     juce::TextButton expandButton { "Advanced Debug" };
-    juce::Label modeLabel;
-    juce::Label agentIdLabel;
     juce::Label endpointLabel;
-    juce::ComboBox modeBox;
-    juce::TextEditor agentIdEditor;
     juce::TextEditor endpointEditor;
-    juce::ToggleButton pollingToggle { "Enable Polling" };
-
-    using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
-    std::unique_ptr<ComboAttachment> modeAttachment;
 };

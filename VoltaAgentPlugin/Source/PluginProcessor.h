@@ -1,16 +1,29 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "Agent/TrackAgent.h"
-#include "Communication/LocalJsonClient.h"
-#include "Communication/MixAnalyzeClient.h"
-#include "Core/TrackRole.h"
+#include "Communication/SessionControlClient.h"
 
-class VoltaAgentPluginAudioProcessor  : public juce::AudioProcessor,
-                                        private juce::AudioProcessorValueTreeState::Listener,
-                                        private juce::AsyncUpdater
+class VoltaAgentPluginAudioProcessor  : public juce::AudioProcessor
 {
 public:
+    enum class ServerState
+    {
+        offline,
+        connectedNoSession,
+        connectedSessionLoaded
+    };
+
+    enum class PlanState
+    {
+        idle,
+        refreshingSession,
+        planning,
+        planReady,
+        stagingApply,
+        applyStaged,
+        error
+    };
+
     VoltaAgentPluginAudioProcessor();
     ~VoltaAgentPluginAudioProcessor() override;
 
@@ -44,49 +57,56 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
-    volta::AgentState getAgentState() const;
-    void setAgentId (const juce::String& newAgentId);
     void setServerEndpoint (const juce::String& newServerEndpoint);
-    void setPollingEnabled (bool shouldPoll);
-    void refreshPollingConfiguration();
-
-    juce::String getTrackRoleText() const;
-    juce::String getConnectionStatusText() const;
-    juce::String getLastCommandText() const;
-    juce::String getLastAppliedText() const;
-    juce::String getConnectedAgentsSummary() const;
-    juce::String getAnalyzeStatusText() const;
-    juce::String getAnalyzeSummaryText() const;
-    juce::String getAnalyzeSuggestionsText() const;
-    bool isAnalyzeRequestInFlight() const;
-    void requestMixAnalysis();
-    void submitControllerCommand (const juce::String& promptText);
+    juce::String getServerEndpointText() const;
+    juce::String getServerStatusText() const;
+    juce::String getSessionStatusText() const;
+    juce::String getPromptText() const;
+    juce::String getExplanationText() const;
+    juce::String getTrackListText() const;
+    juce::String getPlannedChangesText() const;
+    juce::String getActivityLogText() const;
+    bool canApplyPlan() const;
+    bool isRequestInFlight() const;
+    void setCurrentPrompt (const juce::String& promptText);
+    void requestServerHealth();
+    void refreshSession();
+    void planActions();
+    void applyPlannedActions();
 
 private:
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    static juce::String buildAnalyzeEndpointFromServerEndpoint (const juce::String& serverEndpoint);
-    juce::String buildMixAnalyzeRequestBody() const;
-    void handleMixAnalyzeResult (const volta::MixAnalyzeResult& result);
-    void parameterChanged (const juce::String& parameterID, float newValue) override;
-    void handleAsyncUpdate() override;
-    void enqueueIncomingCommand (const volta::MixCommand& command);
-    void applyIncomingCommand (const volta::MixCommand& command);
+    struct SessionSummaryState
+    {
+        bool sessionLoaded = false;
+        int trackCount = 0;
+        juce::Array<volta::SessionTrackInfo> tracks;
+    };
 
-    volta::TrackAgent trackAgent;
-    volta::LocalJsonClient localJsonClient;
-    volta::MixAnalyzeClient mixAnalyzeClient;
-    juce::CriticalSection incomingCommandLock;
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    static juce::String buildServerBaseUrl (const juce::String& serverEndpoint);
+    static juce::String buildSessionEndpoint (const juce::String& serverEndpoint, const juce::String& pathSuffix);
+    static juce::String formatTrackListText (const SessionSummaryState& summaryState);
+    static juce::String formatOperationsText (const juce::Array<volta::SessionOperation>& operations);
+    static juce::String sanitizeResponseForLog (const juce::String& responseText);
+    static juce::String formatBool (bool value);
+    static juce::String getServerStateLabel (ServerState state, int pendingApplyCount);
+    void appendActivityLog (const juce::String& line);
+    void handleSessionControlResponse (const volta::SessionControlResponse& response);
+
+    volta::SessionControlClient sessionControlClient;
     juce::CriticalSection statusLock;
-    std::optional<volta::MixCommand> pendingCommand;
-    std::atomic<int64_t> lastSuccessfulPollTimeMs { 0 };
-    std::atomic<double> currentSampleRate { 44100.0 };
-    std::atomic<bool> analyzeRequestInFlight { false };
-    juce::String lastCommandText { "Waiting for command..." };
-    juce::String lastAppliedText { "No changes yet" };
-    juce::String analyzeStatusText { "Idle" };
-    juce::String analyzeSummaryText { "No analysis yet." };
-    juce::String analyzeSuggestionsText { "No suggestions yet." };
-    juce::String connectedAgentsSummary { "No agents discovered yet.\nInsert Agent mode instances on track channels to populate this list." };
+    std::atomic<bool> requestInFlight { false };
+    ServerState serverState { ServerState::offline };
+    PlanState planState { PlanState::idle };
+    int pendingApplyCount = 0;
+    int lastApplyRevision = 0;
+    juce::String currentPrompt;
+    juce::String explanationText { "Connecting to server..." };
+    juce::String trackListText { "No session loaded." };
+    juce::String plannedChangesText { "No planned changes yet." };
+    juce::String activityLogText { "Connecting to server..." };
+    SessionSummaryState sessionSummary;
+    juce::Array<volta::SessionOperation> lastPlanOperations;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VoltaAgentPluginAudioProcessor)
 };

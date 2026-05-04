@@ -215,3 +215,103 @@
 
 - Build the plugin and verify the new request flow against the Flask server
 - Decide whether to persist the last analysis result in plugin state
+
+## 2026-05-03 — VoltaAgentPlugin central session panel
+
+### Date
+
+`2026-05-03`
+
+### Project
+
+- `VoltaAgentPlugin`
+
+### Goal
+
+- Turn the plugin UI into a central session control panel for `Refresh Session`, `Plan`, and staged `Apply`
+
+### Changed Files
+
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/Communication/SessionControlClient.h`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/PluginProcessor.h`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/PluginProcessor.cpp`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/PluginEditor.h`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/PluginEditor.cpp`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/UI/ControllerView.h`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/UI/ControllerView.cpp`
+- `/Users/simjuheun/Developer/JUCE_prac/WORKLOG.md`
+
+### Decisions
+
+- Added a dedicated session control client for `/health`, `/session-summary`, `/plan-actions`, and `/apply-actions`
+- Kept existing local command polling intact and isolated from the new session panel workflow
+- Switched the main editor to always present the controller panel UI while leaving debug controls available
+- Implemented `Apply` as server-side staging only and logged revision updates without attempting direct Live mutation
+
+### Verification
+
+- Command: `xcodebuild -project /Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Builds/MacOSX/VoltaAgentPlugin.xcodeproj -scheme 'VoltaAgentPlugin - All' -configuration Debug build`
+- Result: passed
+
+### Open Questions
+
+- Whether the old agent-focused UI should remain accessible through a separate panel later
+- Whether health should become periodic polling instead of request-on-load and request-on-action
+
+### Next Actions
+
+- Build the plugin
+- Verify server responses and UI state transitions against the Flask endpoints
+
+## 2026-05-03 — remove legacy command polling
+
+### Date
+
+`2026-05-03`
+
+### Project
+
+- `VoltaAgentPlugin`
+
+### Goal
+
+- Remove legacy `/command` polling and finalize the plugin as a central `mixing-extension` session panel
+
+### Changed Files
+
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/PluginProcessor.h`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/PluginProcessor.cpp`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/UI/DebugPanel.h`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/UI/DebugPanel.cpp`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/Communication/LocalJsonClient.h`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/Core/JsonCommandParser.h`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/Core/MixCommand.h`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/Agent/TrackAgent.h`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/Core/AgentState.h`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/UI/AgentView.h`
+- `/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source/UI/AgentView.cpp`
+- `/Users/simjuheun/Developer/JUCE_prac/WORKLOG.md`
+
+### Decisions
+
+- Removed the old `/command` client, command parser, command queue, and agent-specific UI files from the plugin
+- Changed the default server endpoint to the server base URL instead of a legacy command path
+- Simplified the debug panel to endpoint configuration only
+- Switched audio processing to transparent pass-through so the plugin behaves as a session panel rather than a track effect processor
+
+### Verification
+
+- Command: `rg -n "/command|agent_id=agent_01|Waiting for command|Polling agent command|LocalJsonClient|JsonCommandParser|MixCommand|TrackAgent|AgentState" /Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Source`
+- Result: no matches
+- Command: `xcodebuild -project /Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/Builds/MacOSX/VoltaAgentPlugin.xcodeproj -scheme 'VoltaAgentPlugin - All' -configuration Debug build`
+- Result: passed
+
+### Open Questions
+
+- Whether to remove now-unused APVTS scaffolding entirely in a later cleanup pass
+- Whether server health should be refreshed on a timer after the central panel stabilizes
+
+### Next Actions
+
+- Build the plugin
+- Confirm Flask logs no longer contain legacy 404 traffic

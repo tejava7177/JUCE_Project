@@ -2,38 +2,27 @@
 #include "PluginProcessor.h"
 
 #include "UI/DebugPanel.cpp"
-#include "UI/AgentView.cpp"
 #include "UI/ControllerView.cpp"
 
 VoltaAgentPluginAudioProcessorEditor::VoltaAgentPluginAudioProcessorEditor (VoltaAgentPluginAudioProcessor& p)
     : AudioProcessorEditor (&p),
       audioProcessor (p),
-      agentView (audioProcessor),
       controllerView (audioProcessor),
       debugPanel (audioProcessor)
 {
-    setSize (620, 560);
+    setSize (980, 700);
 
-    titleLabel.setText ("Volta Agent", juce::dontSendNotification);
+    titleLabel.setText ("Central Mix Session Panel", juce::dontSendNotification);
     titleLabel.setJustificationType (juce::Justification::centredLeft);
     titleLabel.setFont (juce::FontOptions (20.0f, juce::Font::bold));
 
-    trackTypeLabel.setText ("Track Type", juce::dontSendNotification);
-    statusTitleLabel.setText ("Status", juce::dontSendNotification);
+    statusTitleLabel.setText ("Server", juce::dontSendNotification);
 
     addAndMakeVisible (titleLabel);
-    addAndMakeVisible (trackTypeLabel);
     addAndMakeVisible (statusTitleLabel);
     addAndMakeVisible (statusValueLabel);
-    addAndMakeVisible (trackTypeBox);
-    addAndMakeVisible (agentView);
     addAndMakeVisible (controllerView);
     addAndMakeVisible (debugPanel);
-
-    auto roles = volta::getTrackRoleNames();
-    for (auto index = 0; index < roles.size(); ++index)
-        trackTypeBox.addItem (roles[index], index + 1);
-    trackTypeAttachment = std::make_unique<ComboAttachment> (audioProcessor.apvts, "track_role", trackTypeBox);
 
     debugPanel.onLayoutChange = [this]
     {
@@ -67,35 +56,15 @@ void VoltaAgentPluginAudioProcessorEditor::resized()
     titleLabel.setBounds (area.removeFromTop (28));
     area.removeFromTop (12);
 
-    auto state = audioProcessor.getAgentState();
     auto headerRow = area.removeFromTop (30);
-
-    if (state.mode == volta::PluginMode::agent)
-    {
-        trackTypeLabel.setVisible (true);
-        trackTypeBox.setVisible (true);
-        trackTypeLabel.setBounds (headerRow.removeFromLeft (78));
-        trackTypeBox.setBounds (headerRow.removeFromLeft (170));
-        headerRow.removeFromLeft (20);
-    }
-    else
-    {
-        trackTypeLabel.setVisible (false);
-        trackTypeBox.setVisible (false);
-    }
-
-    statusTitleLabel.setBounds (headerRow.removeFromLeft (50));
-    statusValueLabel.setBounds (headerRow.removeFromLeft (230));
+    statusTitleLabel.setBounds (headerRow.removeFromLeft (52));
+    statusValueLabel.setBounds (headerRow);
 
     area.removeFromTop (14);
 
     auto debugHeight = debugPanel.getPreferredHeight();
     auto contentHeight = juce::jmax (150, area.getHeight() - debugHeight - 14);
     auto contentArea = area.removeFromTop (contentHeight);
-
-    agentView.setVisible (state.mode == volta::PluginMode::agent);
-    controllerView.setVisible (state.mode == volta::PluginMode::controller);
-    agentView.setBounds (contentArea);
     controllerView.setBounds (contentArea);
 
     area.removeFromTop (14);
@@ -109,11 +78,7 @@ void VoltaAgentPluginAudioProcessorEditor::timerCallback()
 
 void VoltaAgentPluginAudioProcessorEditor::refreshLayoutAndState()
 {
-    auto state = audioProcessor.getAgentState();
-    titleLabel.setText (state.mode == volta::PluginMode::agent ? "Volta Agent" : "Volta Controller",
-                        juce::dontSendNotification);
-    statusValueLabel.setText (audioProcessor.getConnectionStatusText(), juce::dontSendNotification);
-    agentView.refreshState();
+    statusValueLabel.setText (audioProcessor.getServerStatusText(), juce::dontSendNotification);
     controllerView.refreshState();
     debugPanel.refreshState();
     resized();

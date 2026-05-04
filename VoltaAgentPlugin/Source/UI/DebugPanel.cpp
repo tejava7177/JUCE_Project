@@ -7,25 +7,11 @@ DebugPanel::DebugPanel (VoltaAgentPluginAudioProcessor& processor)
     addAndMakeVisible (expandButton);
     expandButton.addListener (this);
 
-    modeLabel.setText ("Mode", juce::dontSendNotification);
-    agentIdLabel.setText ("Agent ID", juce::dontSendNotification);
-    endpointLabel.setText ("Endpoint", juce::dontSendNotification);
-
-    modeBox.addItem ("Agent", 1);
-    modeBox.addItem ("Controller", 2);
-    modeAttachment = std::make_unique<ComboAttachment> (audioProcessor.apvts, "plugin_mode", modeBox);
-
-    agentIdEditor.addListener (this);
+    endpointLabel.setText ("Server URL", juce::dontSendNotification);
     endpointEditor.addListener (this);
-    pollingToggle.addListener (this);
 
-    addChildComponent (modeLabel);
-    addChildComponent (agentIdLabel);
     addChildComponent (endpointLabel);
-    addChildComponent (modeBox);
-    addChildComponent (agentIdEditor);
     addChildComponent (endpointEditor);
-    addChildComponent (pollingToggle);
 
     updateVisibility();
     refreshState();
@@ -34,9 +20,7 @@ DebugPanel::DebugPanel (VoltaAgentPluginAudioProcessor& processor)
 DebugPanel::~DebugPanel()
 {
     expandButton.removeListener (this);
-    agentIdEditor.removeListener (this);
     endpointEditor.removeListener (this);
-    pollingToggle.removeListener (this);
 }
 
 void DebugPanel::paint (juce::Graphics& g)
@@ -58,34 +42,18 @@ void DebugPanel::resized()
     constexpr int labelWidth = 80;
 
     auto row = area.removeFromTop (rowHeight);
-    modeLabel.setBounds (row.removeFromLeft (labelWidth));
-    modeBox.setBounds (row.removeFromLeft (160));
-
-    area.removeFromTop (8);
-    row = area.removeFromTop (rowHeight);
-    agentIdLabel.setBounds (row.removeFromLeft (labelWidth));
-    agentIdEditor.setBounds (row);
-
-    area.removeFromTop (8);
-    row = area.removeFromTop (rowHeight);
     endpointLabel.setBounds (row.removeFromLeft (labelWidth));
     endpointEditor.setBounds (row);
-
-    area.removeFromTop (8);
-    pollingToggle.setBounds (area.removeFromTop (rowHeight));
 }
 
 void DebugPanel::refreshState()
 {
-    auto state = audioProcessor.getAgentState();
-    agentIdEditor.setText (state.agentId, juce::dontSendNotification);
-    endpointEditor.setText (state.serverEndpoint, juce::dontSendNotification);
-    pollingToggle.setToggleState (state.pollingEnabled, juce::dontSendNotification);
+    endpointEditor.setText (audioProcessor.getServerEndpointText(), juce::dontSendNotification);
 }
 
 int DebugPanel::getPreferredHeight() const
 {
-    return expanded ? 170 : 52;
+    return expanded ? 92 : 52;
 }
 
 void DebugPanel::buttonClicked (juce::Button* button)
@@ -97,10 +65,6 @@ void DebugPanel::buttonClicked (juce::Button* button)
         updateVisibility();
         if (onLayoutChange)
             onLayoutChange();
-    }
-    else if (button == &pollingToggle)
-    {
-        audioProcessor.setPollingEnabled (pollingToggle.getToggleState());
     }
 }
 
@@ -118,18 +82,13 @@ void DebugPanel::textEditorReturnKeyPressed (juce::TextEditor& editor)
 
 void DebugPanel::commitTextEditors()
 {
-    audioProcessor.setAgentId (agentIdEditor.getText());
     audioProcessor.setServerEndpoint (endpointEditor.getText());
+    audioProcessor.requestServerHealth();
     refreshState();
 }
 
 void DebugPanel::updateVisibility()
 {
-    modeLabel.setVisible (expanded);
-    agentIdLabel.setVisible (expanded);
     endpointLabel.setVisible (expanded);
-    modeBox.setVisible (expanded);
-    agentIdEditor.setVisible (expanded);
     endpointEditor.setVisible (expanded);
-    pollingToggle.setVisible (expanded);
 }

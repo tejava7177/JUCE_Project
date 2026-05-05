@@ -19,6 +19,13 @@ void configureCardLabel (juce::Label& label, const juce::String& text)
     label.setFont (juce::FontOptions (15.0f, juce::Font::bold));
 }
 
+void configureBubbleArea (juce::TextEditor& editor)
+{
+    configureReadOnlyArea (editor);
+    editor.setColour (juce::TextEditor::backgroundColourId, juce::Colour::fromRGB (34, 46, 52));
+    editor.setColour (juce::TextEditor::outlineColourId, juce::Colour::fromRGBA (255, 255, 255, 0));
+}
+
 juce::String korean (const char* escapedUnicode)
 {
     return juce::String::fromUTF8 (juce::CharPointer_UTF8 (escapedUnicode));
@@ -36,7 +43,7 @@ juce::String greetingExample()
 
 juce::String syncingTracksLine()
 {
-    return korean ("\xED\x94\x84\xEB\xA1\x9C\xEC\xA0\x9D\xED\x8A\xB8 \xED\x8A\xB8\xEB\x9E\x99\xEC\x9D\x84 \xEB\xB0\xB1\xEA\xB7\xB8\xEB\x9D\xBC\xEC\x9A\xB4\xEB\x93\x9C\xEC\x97\x90\xEC\x84\x9C \xEB\x8F\x99\xEA\xB8\xB0\xED\x99\x94\xED\x95\x98\xEA\xB3\xA0 \xEC\x9E\x88\xEC\x8A\xB5\xEB\x8B\x88\xEB\x8B\xA4.");
+    return korean ("\xED\x94\x84\xEB\xA1\x9C\xEC\xA0\x9D\xED\x8A\xB8 \xED\x8A\xB8\xEB\x9E\x99 \xEC\xA0\x95\xEB\xB3\xB4\xEB\xA5\xBC \xEB\xB0\xB1\xEA\xB7\xB8\xEB\x9D\xBC\xEC\x9A\xB4\xEB\x93\x9C\xEC\x97\x90\xEC\x84\x9C \xEC\x84\x9C\xEB\xB2\x84\xEB\xA1\x9C \xEB\xB3\xB4\xEB\x82\xB4\xEA\xB3\xA0 \xEC\x9E\x88\xEC\x8A\xB5\xEB\x8B\x88\xEB\x8B\xA4.");
 }
 
 juce::String sessionReadyLine()
@@ -44,60 +51,46 @@ juce::String sessionReadyLine()
     return korean ("\xEC\x84\xB8\xEC\x85\x98 \xEC\x8A\xA4\xEC\xBA\x94\xEC\x9D\xB4 \xEC\x99\x84\xEB\xA3\x8C\xEB\x90\x98\xEC\x97\x88\xEC\x8A\xB5\xEB\x8B\x88\xEB\x8B\xA4. \xEC\x9E\xA5\xEB\xA5\xB4\xEB\xA5\xBC \xEC\x9E\x85\xEB\xA0\xA5\xED\x95\x98\xEB\xA9\xB4 \xEB\x8B\xA4\xEC\x9D\x8C \xEB\xB6\x84\xEC\x84\x9D \xEB\x8B\xA8\xEA\xB3\x84\xEB\xA1\x9C \xEB\x84\x98\xEC\x96\xB4\xEA\xB0\x91\xEB\x8B\x88\xEB\x8B\xA4.");
 }
 
-juce::String analysisPreparingLine()
-{
-    return korean ("\xED\x94\x84\xEB\xA1\x9C\xEC\xA0\x9D\xED\x8A\xB8 \xEB\xB6\x84\xEC\x84\x9D\xEC\x9D\x84 \xEC\xA4\x80\xEB\xB9\x84 \xEC\xA4\x91\xEC\x9E\x85\xEB\x8B\x88\xEB\x8B\xA4.");
-}
-
-juce::String syncStatusLine()
-{
-    return korean ("\xED\x8A\xB8\xEB\x9E\x99 \xEC\xA0\x95\xEB\xB3\xB4\xEB\xA5\xBC \xEC\x84\x9C\xEB\xB2\x84\xEB\xA1\x9C \xEB\x8F\x99\xEA\xB8\xB0\xED\x99\x94\xED\x95\x98\xEB\x8A\x94 \xEC\xA4\x91\xEC\x9E\x85\xEB\x8B\x88\xEB\x8B\xA4.");
-}
-
-juce::String waitingGenreLine()
-{
-    return korean ("\xEC\x9E\xA5\xEB\xA5\xB4 \xEC\x9E\x85\xEB\xA0\xA5 \xEB\x8C\x80\xEA\xB8\xB0 \xEC\xA4\x91");
-}
-
-juce::String sessionReadyShortLine()
-{
-    return korean ("\xEC\x84\xB8\xEC\x85\x98 \xEC\xA4\x80\xEB\xB9\x84 \xEC\x99\x84\xEB\xA3\x8C");
-}
-
-juce::String genrePromptTitle()
+juce::String promptTitleText()
 {
     return korean ("\xEC\x9E\xA5\xEB\xA5\xB4\xEC\x99\x80 \xEC\xB2\xAB \xEC\x9A\x94\xEC\xB2\xAD");
+}
+
+juce::String explanationPlaceholder()
+{
+    return korean ("\xEC\x9E\xA5\xEB\xA5\xB4\xEB\xA5\xBC \xEC\x9E\x85\xEB\xA0\xA5\xED\x95\x98\xEA\xB3\xA0 Start Session\xEC\x9D\x84 \xEB\x88\x84\xEB\xA5\xB4\xEB\xA9\xB4 \xEB\x8B\xA4\xEC\x9D\x8C \xEB\x8B\xA8\xEA\xB3\x84 \xEA\xB0\x80\xEC\x9D\xB4\xEB\x93\x9C\xEA\xB0\x80 \xEC\x97\xAC\xEA\xB8\xB0\xEC\x97\x90 \xEB\x82\x98\xEC\x98\xB5\xEB\x8B\x88\xEB\x8B\xA4.");
+}
+
+juce::String previewPlaceholder()
+{
+    return korean ("\xEC\x95\x84\xEC\xA7\x81 \xEC\xA0\x81\xEC\x9A\xA9\xED\x95\xA0 \xEA\xB3\x84\xED\x9A\x8D\xEC\x9D\xB4 \xEC\x97\x86\xEC\x8A\xB5\xEB\x8B\x88\xEB\x8B\xA4.");
 }
 }
 
 ControllerView::ControllerView (VoltaAgentPluginAudioProcessor& processor)
     : audioProcessor (processor)
 {
-    configureCardLabel (chatTitle, "Assistant");
-    configureCardLabel (analysisTitle, "Analysis Status");
+    configureCardLabel (stepTitle, "Current Step");
+    configureCardLabel (chatTitle, "Chat");
     configureCardLabel (actionTitle, "Genre Shortcuts");
-    configureCardLabel (promptTitle, genrePromptTitle());
-    configureCardLabel (sessionStatusTitle, "Session");
-    configureCardLabel (tracksTitle, "Tracks");
-    configureCardLabel (explanationTitle, "Latest Explanation");
-    configureCardLabel (plannedChangesTitle, "Result Preview");
-    configureCardLabel (activityTitle, "Activity Log");
+    configureCardLabel (promptTitle, promptTitleText());
+    configureCardLabel (explanationTitle, "Assistant Reply");
+    configureCardLabel (plannedChangesTitle, "Action Preview");
 
-    sessionStatusLabel.setJustificationType (juce::Justification::centredLeft);
-    sessionStatusLabel.setFont (juce::FontOptions (15.0f, juce::Font::plain));
+    stepValue.setJustificationType (juce::Justification::centredLeft);
+    stepValue.setFont (juce::FontOptions (15.0f, juce::Font::bold));
+    stepValue.setColour (juce::Label::backgroundColourId, juce::Colour::fromRGB (34, 46, 52));
+    stepValue.setColour (juce::Label::outlineColourId, juce::Colour::fromRGBA (255, 255, 255, 0));
+    stepValue.setBorderSize (juce::BorderSize<int> (8, 12, 8, 12));
 
     promptEditor.setMultiLine (true);
     promptEditor.setReturnKeyStartsNewLine (true);
     promptEditor.addListener (this);
 
-    configureReadOnlyArea (chatTranscript);
-    configureReadOnlyArea (analysisStatusValue);
-    configureReadOnlyArea (tracksList);
-    configureReadOnlyArea (explanationValue);
-    configureReadOnlyArea (plannedChangesValue);
-    configureReadOnlyArea (activityLogValue);
+    configureBubbleArea (chatTranscript);
+    configureBubbleArea (explanationValue);
+    configureBubbleArea (plannedChangesValue);
 
-    refreshSessionButton.addListener (this);
     planButton.addListener (this);
     applyButton.addListener (this);
     trackLengthButton.addListener (this);
@@ -105,10 +98,10 @@ ControllerView::ControllerView (VoltaAgentPluginAudioProcessor& processor)
     gainBalanceButton.addListener (this);
     eqPrepButton.addListener (this);
 
+    addAndMakeVisible (stepTitle);
+    addAndMakeVisible (stepValue);
     addAndMakeVisible (chatTitle);
     addAndMakeVisible (chatTranscript);
-    addAndMakeVisible (analysisTitle);
-    addAndMakeVisible (analysisStatusValue);
     addAndMakeVisible (actionTitle);
     addAndMakeVisible (trackLengthButton);
     addAndMakeVisible (groupingButton);
@@ -118,24 +111,16 @@ ControllerView::ControllerView (VoltaAgentPluginAudioProcessor& processor)
     addAndMakeVisible (promptEditor);
     addAndMakeVisible (planButton);
     addAndMakeVisible (applyButton);
-    addAndMakeVisible (sessionStatusTitle);
-    addAndMakeVisible (sessionStatusLabel);
-    addAndMakeVisible (refreshSessionButton);
-    addAndMakeVisible (tracksTitle);
-    addAndMakeVisible (tracksList);
     addAndMakeVisible (explanationTitle);
     addAndMakeVisible (explanationValue);
     addAndMakeVisible (plannedChangesTitle);
     addAndMakeVisible (plannedChangesValue);
-    addAndMakeVisible (activityTitle);
-    addAndMakeVisible (activityLogValue);
 
     refreshState();
 }
 
 ControllerView::~ControllerView()
 {
-    refreshSessionButton.removeListener (this);
     planButton.removeListener (this);
     applyButton.removeListener (this);
     trackLengthButton.removeListener (this);
@@ -154,90 +139,67 @@ void ControllerView::paint (juce::Graphics& g)
     g.drawRoundedRectangle (bounds, 12.0f, 1.0f);
 
     auto area = getLocalBounds().reduced (14);
-    auto top = area.removeFromTop (268);
+    auto top = area.removeFromTop (308);
+    auto middle = area.removeFromTop (186);
+    area.removeFromTop (12);
     auto bottom = area;
 
-    auto leftTop = top.removeFromLeft (420);
-    auto rightTop = top;
-
     g.setColour (juce::Colour::fromRGBA (255, 255, 255, 10));
-    g.fillRoundedRectangle (leftTop.toFloat(), 10.0f);
-    g.fillRoundedRectangle (rightTop.toFloat(), 10.0f);
-
-    auto leftBottom = bottom.removeFromLeft (420);
-    auto rightBottom = bottom;
-    g.fillRoundedRectangle (leftBottom.toFloat(), 10.0f);
-    g.fillRoundedRectangle (rightBottom.toFloat(), 10.0f);
+    g.fillRoundedRectangle (top.toFloat(), 10.0f);
+    g.fillRoundedRectangle (middle.toFloat(), 10.0f);
+    g.fillRoundedRectangle (bottom.toFloat(), 10.0f);
 }
 
 void ControllerView::resized()
 {
     auto area = getLocalBounds().reduced (18);
 
-    auto topArea = area.removeFromTop (268);
-    auto bottomArea = area;
+    stepTitle.setBounds (area.removeFromTop (24));
+    area.removeFromTop (8);
+    stepValue.setBounds (area.removeFromTop (40));
+    area.removeFromTop (14);
 
-    auto leftTop = topArea.removeFromLeft (420);
-    topArea.removeFromLeft (12);
-    auto rightTop = topArea;
+    auto top = area.removeFromTop (308);
+    auto middle = area.removeFromTop (186);
+    area.removeFromTop (12);
+    auto bottom = area;
 
-    auto leftTopHeader = leftTop.removeFromTop (24);
-    chatTitle.setBounds (leftTopHeader.removeFromLeft (120));
-    leftTop.removeFromTop (8);
-    chatTranscript.setBounds (leftTop.removeFromTop (116));
-    leftTop.removeFromTop (12);
-    analysisTitle.setBounds (leftTop.removeFromTop (24));
-    leftTop.removeFromTop (8);
-    analysisStatusValue.setBounds (leftTop.removeFromTop (88));
+    chatTitle.setBounds (top.removeFromTop (24));
+    top.removeFromTop (8);
+    chatTranscript.setBounds (top.removeFromTop (140));
+    top.removeFromTop (14);
 
-    auto sessionHeader = rightTop.removeFromTop (24);
-    sessionStatusTitle.setBounds (sessionHeader.removeFromLeft (72));
-    sessionStatusLabel.setBounds (sessionHeader.removeFromLeft (420));
-    refreshSessionButton.setBounds (sessionHeader.removeFromRight (170));
-
-    rightTop.removeFromTop (12);
-    actionTitle.setBounds (rightTop.removeFromTop (24));
-    rightTop.removeFromTop (8);
-
-    auto actionRow = rightTop.removeFromTop (30);
-    trackLengthButton.setBounds (actionRow.removeFromLeft (140));
+    actionTitle.setBounds (top.removeFromTop (24));
+    top.removeFromTop (8);
+    auto actionRow = top.removeFromTop (40);
+    auto buttonWidth = (actionRow.getWidth() - 24) / 4;
+    trackLengthButton.setBounds (actionRow.removeFromLeft (buttonWidth));
     actionRow.removeFromLeft (8);
-    groupingButton.setBounds (actionRow.removeFromLeft (110));
+    groupingButton.setBounds (actionRow.removeFromLeft (buttonWidth));
     actionRow.removeFromLeft (8);
-    gainBalanceButton.setBounds (actionRow.removeFromLeft (128));
+    gainBalanceButton.setBounds (actionRow.removeFromLeft (buttonWidth));
     actionRow.removeFromLeft (8);
-    eqPrepButton.setBounds (actionRow.removeFromLeft (100));
+    eqPrepButton.setBounds (actionRow);
 
-    rightTop.removeFromTop (12);
-    promptTitle.setBounds (rightTop.removeFromTop (24));
-    rightTop.removeFromTop (8);
-    promptEditor.setBounds (rightTop.removeFromTop (86));
-    rightTop.removeFromTop (10);
+    promptTitle.setBounds (middle.removeFromTop (24));
+    middle.removeFromTop (8);
+    promptEditor.setBounds (middle.removeFromTop (100));
+    middle.removeFromTop (10);
 
-    auto promptButtons = rightTop.removeFromTop (32);
-    planButton.setBounds (promptButtons.removeFromLeft (140));
+    auto promptButtons = middle.removeFromTop (36);
+    planButton.setBounds (promptButtons.removeFromLeft (180));
     promptButtons.removeFromLeft (10);
-    applyButton.setBounds (promptButtons.removeFromLeft (140));
+    applyButton.setBounds (promptButtons.removeFromLeft (180));
 
-    auto leftBottom = bottomArea.removeFromLeft (420);
-    bottomArea.removeFromLeft (12);
-    auto rightBottom = bottomArea;
+    auto bottomTop = bottom.removeFromTop ((bottom.getHeight() - 12) / 2);
+    explanationTitle.setBounds (bottomTop.removeFromTop (24));
+    bottomTop.removeFromTop (8);
+    explanationValue.setBounds (bottomTop);
 
-    tracksTitle.setBounds (leftBottom.removeFromTop (24));
-    leftBottom.removeFromTop (8);
-    tracksList.setBounds (leftBottom.removeFromTop (144));
-    leftBottom.removeFromTop (12);
-    activityTitle.setBounds (leftBottom.removeFromTop (24));
-    leftBottom.removeFromTop (8);
-    activityLogValue.setBounds (leftBottom);
-
-    explanationTitle.setBounds (rightBottom.removeFromTop (24));
-    rightBottom.removeFromTop (8);
-    explanationValue.setBounds (rightBottom.removeFromTop (84));
-    rightBottom.removeFromTop (12);
-    plannedChangesTitle.setBounds (rightBottom.removeFromTop (24));
-    rightBottom.removeFromTop (8);
-    plannedChangesValue.setBounds (rightBottom);
+    bottom.removeFromTop (12);
+    plannedChangesTitle.setBounds (bottom.removeFromTop (24));
+    bottom.removeFromTop (8);
+    plannedChangesValue.setBounds (bottom);
 }
 
 void ControllerView::refreshState()
@@ -246,38 +208,17 @@ void ControllerView::refreshState()
     auto sessionStatus = audioProcessor.getSessionStatusText();
     auto serverStatus = audioProcessor.getServerStatusText();
     auto explanation = audioProcessor.getExplanationText();
+    auto plannedChanges = audioProcessor.getPlannedChangesText();
 
-    juce::StringArray chatLines;
-    chatLines.add ("AI: " + greetingLine());
-    chatLines.add ("AI: " + greetingExample());
-    if (sessionStatus.contains ("tracks loaded"))
-        chatLines.add ("AI: " + sessionReadyLine());
-    else
-        chatLines.add ("AI: " + syncingTracksLine());
-    if (promptText.isNotEmpty())
-        chatLines.add ("User: " + promptText);
-
-    juce::StringArray analysisLines;
-    analysisLines.add (analysisPreparingLine());
-    analysisLines.add (syncStatusLine());
-    analysisLines.add ("Server: " + serverStatus);
-    analysisLines.add ("Session: " + sessionStatus);
-    analysisLines.add (sessionStatus.contains ("tracks loaded") ? sessionReadyShortLine() : waitingGenreLine());
-    analysisLines.add ("Latest result: " + explanation);
-
-    chatTranscript.setText (chatLines.joinIntoString ("\n\n"), juce::dontSendNotification);
-    analysisStatusValue.setText (analysisLines.joinIntoString ("\n"), juce::dontSendNotification);
-    sessionStatusLabel.setText (sessionStatus, juce::dontSendNotification);
-    tracksList.setText (audioProcessor.getTrackListText(), juce::dontSendNotification);
-    explanationValue.setText (explanation, juce::dontSendNotification);
-    plannedChangesValue.setText (audioProcessor.getPlannedChangesText(), juce::dontSendNotification);
-    activityLogValue.setText (audioProcessor.getActivityLogText(), juce::dontSendNotification);
+    chatTranscript.setText (buildChatTranscript (promptText, sessionStatus, explanation), juce::dontSendNotification);
+    stepValue.setText (buildStepStatus (serverStatus, sessionStatus), juce::dontSendNotification);
+    explanationValue.setText (explanation.isNotEmpty() ? explanation : explanationPlaceholder(), juce::dontSendNotification);
+    plannedChangesValue.setText (plannedChanges.isNotEmpty() ? plannedChanges : previewPlaceholder(), juce::dontSendNotification);
 
     if (promptEditor.getText() != promptText)
         promptEditor.setText (promptText, juce::dontSendNotification);
 
     auto busy = audioProcessor.isRequestInFlight();
-    refreshSessionButton.setEnabled (! busy);
     planButton.setEnabled (! busy);
     applyButton.setEnabled (! busy && audioProcessor.canApplyPlan());
     trackLengthButton.setEnabled (! busy);
@@ -288,11 +229,7 @@ void ControllerView::refreshState()
 
 void ControllerView::buttonClicked (juce::Button* button)
 {
-    if (button == &refreshSessionButton)
-    {
-        audioProcessor.refreshSession();
-    }
-    else if (button == &planButton)
+    if (button == &planButton)
     {
         audioProcessor.setCurrentPrompt (promptEditor.getText());
         audioProcessor.planActions();
@@ -331,4 +268,44 @@ void ControllerView::setSuggestedPrompt (const juce::String& promptText)
 {
     promptEditor.setText (promptText, juce::dontSendNotification);
     audioProcessor.setCurrentPrompt (promptText);
+}
+
+juce::String ControllerView::buildChatTranscript (const juce::String& promptText,
+                                                  const juce::String& sessionStatus,
+                                                  const juce::String& explanation) const
+{
+    juce::StringArray lines;
+    lines.add ("AI  " + greetingLine());
+    lines.add ("AI  " + greetingExample());
+
+    if (sessionStatus.contains ("tracks loaded"))
+        lines.add ("AI  " + sessionReadyLine());
+    else
+        lines.add ("AI  " + syncingTracksLine());
+
+    if (promptText.isNotEmpty())
+        lines.add ("You  " + promptText);
+
+    if (explanation.isNotEmpty() && explanation != audioProcessor.getServerStatusText())
+        lines.add ("AI  " + explanation);
+
+    return lines.joinIntoString ("\n\n");
+}
+
+juce::String ControllerView::buildStepStatus (const juce::String& serverStatus,
+                                              const juce::String& sessionStatus) const
+{
+    if (! serverStatus.startsWithIgnoreCase ("Server connected"))
+        return "1. Connect to server";
+
+    if (! sessionStatus.contains ("tracks loaded"))
+        return "2. Syncing project tracks";
+
+    if (audioProcessor.isRequestInFlight())
+        return "3. Waiting for AI response";
+
+    if (audioProcessor.canApplyPlan())
+        return "4. Review plan and apply";
+
+    return "3. Enter genre and first request";
 }

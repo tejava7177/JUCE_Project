@@ -32,4 +32,13 @@ private:
     juce::TextButton expandButton { "Advanced Debug" };
     juce::Label endpointLabel;
     juce::TextEditor endpointEditor;
+    juce::Label serverLabel;
+    juce::Label sessionLabel;
+    juce::TextButton refreshSessionButton { "Refresh Session" };
+    juce::Label tracksLabel;
+    juce::TextEditor tracksEditor;
+    juce::Label explanationLabel;
+    juce::TextEditor explanationEditor;
+    juce::Label activityLabel;
+    juce::TextEditor activityEditor;
 };

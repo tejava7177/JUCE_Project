@@ -20,14 +20,19 @@ private:
     void buttonClicked (juce::Button* button) override;
     void textEditorTextChanged (juce::TextEditor& editor) override;
     void setSuggestedPrompt (const juce::String& promptText);
+    juce::String buildChatTranscript (const juce::String& promptText,
+                                      const juce::String& sessionStatus,
+                                      const juce::String& explanation) const;
+    juce::String buildStepStatus (const juce::String& serverStatus,
+                                  const juce::String& sessionStatus) const;
 
     VoltaAgentPluginAudioProcessor& audioProcessor;
 
+    juce::Label stepTitle;
+    juce::Label stepValue;
+
     juce::Label chatTitle;
     juce::TextEditor chatTranscript;
-
-    juce::Label analysisTitle;
-    juce::TextEditor analysisStatusValue;
 
     juce::Label actionTitle;
     juce::TextButton trackLengthButton { "K-pop" };
@@ -40,19 +45,9 @@ private:
     juce::TextButton planButton { "Start Session" };
     juce::TextButton applyButton { "Apply Staged" };
 
-    juce::Label sessionStatusTitle;
-    juce::Label sessionStatusLabel;
-    juce::TextButton refreshSessionButton { "Refresh Session" };
-
-    juce::Label tracksTitle;
-    juce::TextEditor tracksList;
-
     juce::Label explanationTitle;
     juce::TextEditor explanationValue;
 
     juce::Label plannedChangesTitle;
     juce::TextEditor plannedChangesValue;
-
-    juce::Label activityTitle;
-    juce::TextEditor activityLogValue;
 };

@@ -29,7 +29,7 @@ VoltaAgentPluginAudioProcessorEditor::VoltaAgentPluginAudioProcessorEditor (Volt
         resized();
     };
 
-    startTimerHz (10);
+    startTimerHz (8);
     refreshLayoutAndState();
 }
 

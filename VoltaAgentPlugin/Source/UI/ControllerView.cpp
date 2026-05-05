@@ -18,6 +18,56 @@ void configureCardLabel (juce::Label& label, const juce::String& text)
     label.setJustificationType (juce::Justification::centredLeft);
     label.setFont (juce::FontOptions (15.0f, juce::Font::bold));
 }
+
+juce::String korean (const char* escapedUnicode)
+{
+    return juce::String::fromUTF8 (juce::CharPointer_UTF8 (escapedUnicode));
+}
+
+juce::String greetingLine()
+{
+    return korean ("\xEC\x95\x88\xEB\x85\x95\xED\x95\x98\xEC\x84\xB8\xEC\x9A\x94. \xEB\xA8\xBC\xEC\xA0\x80 \xEA\xB3\xA1\xEC\x9D\x98 \xEC\x9E\xA5\xEB\xA5\xB4\xEB\xA5\xBC \xEC\x95\x8C\xEB\xA0\xA4\xEC\xA3\xBC\xEC\x84\xB8\xEC\x9A\x94.");
+}
+
+juce::String greetingExample()
+{
+    return korean ("\xEC\x98\x88: Hip-hop, K-pop, Rock, R&B, EDM \xEB\x93\xB1");
+}
+
+juce::String syncingTracksLine()
+{
+    return korean ("\xED\x94\x84\xEB\xA1\x9C\xEC\xA0\x9D\xED\x8A\xB8 \xED\x8A\xB8\xEB\x9E\x99\xEC\x9D\x84 \xEB\xB0\xB1\xEA\xB7\xB8\xEB\x9D\xBC\xEC\x9A\xB4\xEB\x93\x9C\xEC\x97\x90\xEC\x84\x9C \xEB\x8F\x99\xEA\xB8\xB0\xED\x99\x94\xED\x95\x98\xEA\xB3\xA0 \xEC\x9E\x88\xEC\x8A\xB5\xEB\x8B\x88\xEB\x8B\xA4.");
+}
+
+juce::String sessionReadyLine()
+{
+    return korean ("\xEC\x84\xB8\xEC\x85\x98 \xEC\x8A\xA4\xEC\xBA\x94\xEC\x9D\xB4 \xEC\x99\x84\xEB\xA3\x8C\xEB\x90\x98\xEC\x97\x88\xEC\x8A\xB5\xEB\x8B\x88\xEB\x8B\xA4. \xEC\x9E\xA5\xEB\xA5\xB4\xEB\xA5\xBC \xEC\x9E\x85\xEB\xA0\xA5\xED\x95\x98\xEB\xA9\xB4 \xEB\x8B\xA4\xEC\x9D\x8C \xEB\xB6\x84\xEC\x84\x9D \xEB\x8B\xA8\xEA\xB3\x84\xEB\xA1\x9C \xEB\x84\x98\xEC\x96\xB4\xEA\xB0\x91\xEB\x8B\x88\xEB\x8B\xA4.");
+}
+
+juce::String analysisPreparingLine()
+{
+    return korean ("\xED\x94\x84\xEB\xA1\x9C\xEC\xA0\x9D\xED\x8A\xB8 \xEB\xB6\x84\xEC\x84\x9D\xEC\x9D\x84 \xEC\xA4\x80\xEB\xB9\x84 \xEC\xA4\x91\xEC\x9E\x85\xEB\x8B\x88\xEB\x8B\xA4.");
+}
+
+juce::String syncStatusLine()
+{
+    return korean ("\xED\x8A\xB8\xEB\x9E\x99 \xEC\xA0\x95\xEB\xB3\xB4\xEB\xA5\xBC \xEC\x84\x9C\xEB\xB2\x84\xEB\xA1\x9C \xEB\x8F\x99\xEA\xB8\xB0\xED\x99\x94\xED\x95\x98\xEB\x8A\x94 \xEC\xA4\x91\xEC\x9E\x85\xEB\x8B\x88\xEB\x8B\xA4.");
+}
+
+juce::String waitingGenreLine()
+{
+    return korean ("\xEC\x9E\xA5\xEB\xA5\xB4 \xEC\x9E\x85\xEB\xA0\xA5 \xEB\x8C\x80\xEA\xB8\xB0 \xEC\xA4\x91");
+}
+
+juce::String sessionReadyShortLine()
+{
+    return korean ("\xEC\x84\xB8\xEC\x85\x98 \xEC\xA4\x80\xEB\xB9\x84 \xEC\x99\x84\xEB\xA3\x8C");
+}
+
+juce::String genrePromptTitle()
+{
+    return korean ("\xEC\x9E\xA5\xEB\xA5\xB4\xEC\x99\x80 \xEC\xB2\xAB \xEC\x9A\x94\xEC\xB2\xAD");
+}
 }
 
 ControllerView::ControllerView (VoltaAgentPluginAudioProcessor& processor)
@@ -25,8 +75,8 @@ ControllerView::ControllerView (VoltaAgentPluginAudioProcessor& processor)
 {
     configureCardLabel (chatTitle, "Assistant");
     configureCardLabel (analysisTitle, "Analysis Status");
-    configureCardLabel (actionTitle, "Suggested Actions");
-    configureCardLabel (promptTitle, "Prompt");
+    configureCardLabel (actionTitle, "Genre Shortcuts");
+    configureCardLabel (promptTitle, genrePromptTitle());
     configureCardLabel (sessionStatusTitle, "Session");
     configureCardLabel (tracksTitle, "Tracks");
     configureCardLabel (explanationTitle, "Latest Explanation");
@@ -198,20 +248,21 @@ void ControllerView::refreshState()
     auto explanation = audioProcessor.getExplanationText();
 
     juce::StringArray chatLines;
-    chatLines.add ("AI: Ready to start project analysis.");
-    chatLines.add ("AI: Please enter the genre and the first task you want to try.");
+    chatLines.add ("AI: " + greetingLine());
+    chatLines.add ("AI: " + greetingExample());
     if (sessionStatus.contains ("tracks loaded"))
-        chatLines.add ("AI: Session scan is complete. You can now review track lengths, grouping, and gain balance ideas.");
+        chatLines.add ("AI: " + sessionReadyLine());
     else
-        chatLines.add ("AI: If the session is not ready yet, use Refresh Session to load the latest project state.");
+        chatLines.add ("AI: " + syncingTracksLine());
     if (promptText.isNotEmpty())
         chatLines.add ("User: " + promptText);
 
     juce::StringArray analysisLines;
-    analysisLines.add ("Project session: pending scaffold");
-    analysisLines.add ("Chat session: UI-first mockup");
+    analysisLines.add (analysisPreparingLine());
+    analysisLines.add (syncStatusLine());
     analysisLines.add ("Server: " + serverStatus);
     analysisLines.add ("Session: " + sessionStatus);
+    analysisLines.add (sessionStatus.contains ("tracks loaded") ? sessionReadyShortLine() : waitingGenreLine());
     analysisLines.add ("Latest result: " + explanation);
 
     chatTranscript.setText (chatLines.joinIntoString ("\n\n"), juce::dontSendNotification);
@@ -252,19 +303,19 @@ void ControllerView::buttonClicked (juce::Button* button)
     }
     else if (button == &trackLengthButton)
     {
-        setSuggestedPrompt ("Summarize the length and role of each track first.");
+        setSuggestedPrompt ("K-pop");
     }
     else if (button == &groupingButton)
     {
-        setSuggestedPrompt ("Suggest drum, instrument, and vocal groupings for this session.");
+        setSuggestedPrompt ("Hip-hop");
     }
     else if (button == &gainBalanceButton)
     {
-        setSuggestedPrompt ("Which tracks should I adjust first for basic gain balance?");
+        setSuggestedPrompt ("Rock");
     }
     else if (button == &eqPrepButton)
     {
-        setSuggestedPrompt ("Which tracks should I clean up first for low cut and high cut EQ?");
+        setSuggestedPrompt ("R&B");
     }
 
     refreshState();

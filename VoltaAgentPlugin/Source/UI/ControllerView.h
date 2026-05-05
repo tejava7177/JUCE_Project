@@ -30,14 +30,14 @@ private:
     juce::TextEditor analysisStatusValue;
 
     juce::Label actionTitle;
-    juce::TextButton trackLengthButton { "Track Lengths" };
-    juce::TextButton groupingButton { "Grouping" };
-    juce::TextButton gainBalanceButton { "Gain Balance" };
-    juce::TextButton eqPrepButton { "EQ Prep" };
+    juce::TextButton trackLengthButton { "K-pop" };
+    juce::TextButton groupingButton { "Hip-hop" };
+    juce::TextButton gainBalanceButton { "Rock" };
+    juce::TextButton eqPrepButton { "R&B" };
 
     juce::Label promptTitle;
     juce::TextEditor promptEditor;
-    juce::TextButton planButton { "Send to AI" };
+    juce::TextButton planButton { "Start Session" };
     juce::TextButton applyButton { "Apply Staged" };
 
     juce::Label sessionStatusTitle;

@@ -198,12 +198,12 @@ void ControllerView::refreshState()
     auto explanation = audioProcessor.getExplanationText();
 
     juce::StringArray chatLines;
-    chatLines.add ("AI: 프로젝트 분석을 시작할 준비가 되었습니다.");
-    chatLines.add ("AI: 먼저 장르와 현재 하고 싶은 작업을 적어주세요.");
+    chatLines.add ("AI: Ready to start project analysis.");
+    chatLines.add ("AI: Please enter the genre and the first task you want to try.");
     if (sessionStatus.contains ("tracks loaded"))
-        chatLines.add ("AI: 세션 스캔이 완료되었습니다. 이제 트랙 길이, 그룹핑, gain balance 같은 메카니컬 믹스를 제안할 수 있습니다.");
+        chatLines.add ("AI: Session scan is complete. You can now review track lengths, grouping, and gain balance ideas.");
     else
-        chatLines.add ("AI: 세션이 아직 준비되지 않았다면 Refresh Session으로 최신 프로젝트 상태를 가져오세요.");
+        chatLines.add ("AI: If the session is not ready yet, use Refresh Session to load the latest project state.");
     if (promptText.isNotEmpty())
         chatLines.add ("User: " + promptText);
 

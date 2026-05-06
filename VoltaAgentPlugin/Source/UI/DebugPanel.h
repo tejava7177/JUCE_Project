@@ -34,6 +34,8 @@ private:
     juce::TextEditor endpointEditor;
     juce::Label serverLabel;
     juce::Label sessionLabel;
+    juce::Label projectLabel;
+    juce::Label projectValueLabel;
     juce::TextButton refreshSessionButton { "Refresh Session" };
     juce::Label tracksLabel;
     juce::TextEditor tracksEditor;

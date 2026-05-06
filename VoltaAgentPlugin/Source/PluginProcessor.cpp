@@ -4,6 +4,7 @@
 namespace
 {
 constexpr auto serverEndpointProperty = "serverEndpoint";
+constexpr auto stemFolderProperty = "stemFolder";
 }
 
 VoltaAgentPluginAudioProcessor::VoltaAgentPluginAudioProcessor()
@@ -21,6 +22,9 @@ VoltaAgentPluginAudioProcessor::VoltaAgentPluginAudioProcessor()
 {
     if (! apvts.state.hasProperty (serverEndpointProperty))
         apvts.state.setProperty (serverEndpointProperty, "http://127.0.0.1:5000", nullptr);
+
+    if (apvts.state.hasProperty (stemFolderProperty))
+        analysisUploadState.stemFolder = juce::File (apvts.state.getProperty (stemFolderProperty).toString());
 
     sessionControlClient.setResultHandler ([this] (const volta::SessionControlResponse& response)
     {
@@ -233,10 +237,46 @@ juce::String VoltaAgentPluginAudioProcessor::getActivityLogText() const
     return activityLogText;
 }
 
+juce::String VoltaAgentPluginAudioProcessor::getStemFolderText() const
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    return analysisUploadState.stemFolder.getFullPathName();
+}
+
+juce::String VoltaAgentPluginAudioProcessor::getAnalysisStatusText() const
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    return getAnalysisStateLabel (analysisUploadState);
+}
+
+juce::String VoltaAgentPluginAudioProcessor::getProjectSessionText() const
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    if (projectSessionState.projectSessionId.isEmpty())
+        return "Not created";
+
+    juce::StringArray fields;
+    fields.add ("project=" + projectSessionState.projectSessionId);
+
+    if (projectSessionState.chatSessionId.isNotEmpty())
+        fields.add ("chat=" + projectSessionState.chatSessionId);
+
+    if (projectSessionState.analysisSessionId.isNotEmpty())
+        fields.add ("analysis=" + projectSessionState.analysisSessionId);
+
+    return fields.joinIntoString (" | ");
+}
+
 bool VoltaAgentPluginAudioProcessor::canApplyPlan() const
 {
     const juce::ScopedLock scopedLock (statusLock);
     return planState == PlanState::planReady && ! lastPlanOperations.isEmpty();
+}
+
+bool VoltaAgentPluginAudioProcessor::canStartAnalysisUpload() const
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    return analysisUploadState.stemFolder.isDirectory() && ! requestInFlight.load();
 }
 
 bool VoltaAgentPluginAudioProcessor::isRequestInFlight() const
@@ -248,6 +288,14 @@ void VoltaAgentPluginAudioProcessor::setCurrentPrompt (const juce::String& promp
 {
     const juce::ScopedLock scopedLock (statusLock);
     currentPrompt = promptText;
+}
+
+void VoltaAgentPluginAudioProcessor::setStemFolder (const juce::File& folder)
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    analysisUploadState.stemFolder = folder;
+    analysisUploadState.state = folder.isDirectory() ? AnalysisState::readyToUpload : AnalysisState::idle;
+    apvts.state.setProperty (stemFolderProperty, folder.getFullPathName(), nullptr);
 }
 
 void VoltaAgentPluginAudioProcessor::requestServerHealth()
@@ -283,6 +331,7 @@ void VoltaAgentPluginAudioProcessor::planActions()
 {
     juce::String promptText;
     juce::String endpoint;
+    bool shouldCreateProject = false;
 
     {
         const juce::ScopedLock scopedLock (statusLock);
@@ -299,12 +348,27 @@ void VoltaAgentPluginAudioProcessor::planActions()
         planState = PlanState::planning;
         explanationText = "Planning changes...";
         plannedChangesText = "Waiting for plan response...";
-        endpoint = buildSessionEndpoint (getServerEndpointText(), "/plan-actions");
-        appendActivityLog ("plan-actions request start | POST " + endpoint + " | prompt=" + promptText);
+
+        if (projectSessionState.projectSessionId.isEmpty())
+        {
+            projectSessionState.pendingAction = ProjectAction::createAndSendChat;
+            projectSessionState.pendingChatMessage = promptText;
+            endpoint = buildSessionEndpoint (getServerEndpointText(), "/projects");
+            appendActivityLog ("project session request start | POST " + endpoint + " | reason=chat");
+            shouldCreateProject = true;
+        }
+        else
+        {
+            endpoint = buildSessionEndpoint (getServerEndpointText(), "/projects/" + projectSessionState.projectSessionId + "/chat");
+            appendActivityLog ("project chat request start | POST " + endpoint + " | prompt=" + promptText);
+        }
     }
 
     requestInFlight.store (true);
-    sessionControlClient.requestPlanActions (endpoint, promptText);
+    if (shouldCreateProject)
+        sessionControlClient.requestCreateProject (endpoint);
+    else
+        sessionControlClient.requestProjectChat (endpoint, promptText);
 }
 
 void VoltaAgentPluginAudioProcessor::applyPlannedActions()
@@ -333,6 +397,72 @@ void VoltaAgentPluginAudioProcessor::applyPlannedActions()
 
     requestInFlight.store (true);
     sessionControlClient.requestApplyActions (endpoint, operationsToApply);
+}
+
+void VoltaAgentPluginAudioProcessor::startAnalysisUpload()
+{
+    juce::File stemFolder;
+    juce::String endpoint;
+
+    {
+        const juce::ScopedLock scopedLock (statusLock);
+        stemFolder = analysisUploadState.stemFolder;
+    }
+
+    if (! stemFolder.isDirectory())
+    {
+        const juce::ScopedLock scopedLock (statusLock);
+        analysisUploadState.state = AnalysisState::error;
+        explanationText = "Select a stem folder first";
+        appendActivityLog ("analysis upload blocked | error=no stem folder");
+        return;
+    }
+
+    juce::Array<juce::File> discoveredFiles;
+    auto fileIterator = juce::RangedDirectoryIterator (stemFolder, false, "*.wav", juce::File::findFiles);
+    for (const auto& entry : fileIterator)
+        discoveredFiles.add (entry.getFile());
+
+    auto upperIterator = juce::RangedDirectoryIterator (stemFolder, false, "*.WAV", juce::File::findFiles);
+    for (const auto& entry : upperIterator)
+        discoveredFiles.addIfNotAlreadyThere (entry.getFile());
+
+    if (discoveredFiles.isEmpty())
+    {
+        const juce::ScopedLock scopedLock (statusLock);
+        analysisUploadState.state = AnalysisState::error;
+        explanationText = "No WAV stems found";
+        plannedChangesText = "Export WAV stems into the selected folder, then try again.";
+        appendActivityLog ("analysis upload blocked | error=no wav stems | folder=" + stemFolder.getFullPathName());
+        return;
+    }
+
+    endpoint = buildSessionEndpoint (getServerEndpointText(), "/projects");
+
+    {
+        const juce::ScopedLock scopedLock (statusLock);
+        analysisUploadState.pendingFiles = discoveredFiles;
+        analysisUploadState.totalFiles = discoveredFiles.size();
+        analysisUploadState.uploadedCount = 0;
+        analysisUploadState.analysisSessionId.clear();
+        analysisUploadState.projectSessionId.clear();
+        analysisUploadState.chatSessionId.clear();
+        analysisUploadState.analysisSummaryText = "Preparing analysis session...";
+        analysisUploadState.state = AnalysisState::creatingSession;
+        projectSessionState.projectSessionId.clear();
+        projectSessionState.chatSessionId.clear();
+        projectSessionState.analysisSessionId.clear();
+        projectSessionState.pendingAction = ProjectAction::createAndUploadStems;
+        projectSessionState.pendingChatMessage.clear();
+        explanationText = "Creating analysis session...";
+        plannedChangesText = "Preparing to upload " + juce::String (discoveredFiles.size()) + " WAV stem(s).";
+        appendActivityLog ("project session request start | POST " + endpoint
+                           + " | project=" + stemFolder.getFileName()
+                           + " | wav_files=" + juce::String (discoveredFiles.size()));
+    }
+
+    requestInFlight.store (true);
+    sessionControlClient.requestCreateProject (endpoint);
 }
 
 juce::String VoltaAgentPluginAudioProcessor::buildServerBaseUrl (const juce::String& serverEndpoint)
@@ -410,6 +540,23 @@ juce::String VoltaAgentPluginAudioProcessor::formatOperationsText (const juce::A
     return lines.joinIntoString ("\n");
 }
 
+juce::String VoltaAgentPluginAudioProcessor::formatAnalysisTrackListText (const juce::Array<volta::SessionTrackInfo>& analysisTracks)
+{
+    if (analysisTracks.isEmpty())
+        return "No analysis results yet.";
+
+    juce::StringArray lines;
+
+    for (const auto& track : analysisTracks)
+    {
+        lines.add (track.trackName
+                   + " | duration " + juce::String (track.trackLengthSeconds, 2) + " s"
+                   + " | LUFS " + track.trackLengthDisplay);
+    }
+
+    return lines.joinIntoString ("\n");
+}
+
 juce::String VoltaAgentPluginAudioProcessor::sanitizeResponseForLog (const juce::String& responseText)
 {
     auto flattened = responseText.replaceCharacters ("\r\n", "  ").trim();
@@ -440,6 +587,29 @@ juce::String VoltaAgentPluginAudioProcessor::getServerStateLabel (ServerState st
     return "Server offline";
 }
 
+juce::String VoltaAgentPluginAudioProcessor::getAnalysisStateLabel (const AnalysisUploadState& analysisState)
+{
+    switch (analysisState.state)
+    {
+        case AnalysisState::idle:
+            return "No stem folder selected";
+        case AnalysisState::readyToUpload:
+            return "Ready to upload stems";
+        case AnalysisState::creatingSession:
+            return "Creating analysis session";
+        case AnalysisState::uploading:
+            return "Uploading stems (" + juce::String (analysisState.uploadedCount) + "/" + juce::String (analysisState.totalFiles) + ")";
+        case AnalysisState::fetchingResults:
+            return "Fetching analysis results";
+        case AnalysisState::completed:
+            return "Analysis completed";
+        case AnalysisState::error:
+            return "Analysis failed";
+    }
+
+    return "No stem folder selected";
+}
+
 void VoltaAgentPluginAudioProcessor::appendActivityLog (const juce::String& line)
 {
     auto timestamp = juce::Time::getCurrentTime().formatted ("%H:%M:%S");
@@ -450,10 +620,46 @@ void VoltaAgentPluginAudioProcessor::appendActivityLog (const juce::String& line
     activityLogText = "[" + timestamp + "] " + line + (activityLogText.isEmpty() ? "" : "\n" + activityLogText);
 }
 
+void VoltaAgentPluginAudioProcessor::uploadNextAnalysisFile()
+{
+    juce::File nextFile;
+    juce::String projectSessionId;
+    int trackIndex = 0;
+
+    {
+        const juce::ScopedLock scopedLock (statusLock);
+
+        if (analysisUploadState.pendingFiles.isEmpty())
+        {
+            analysisUploadState.state = AnalysisState::fetchingResults;
+            explanationText = "Fetching analysis results...";
+            auto endpoint = buildSessionEndpoint (getServerEndpointText(), "/projects/" + projectSessionState.projectSessionId + "/analysis");
+            appendActivityLog ("project analysis request start | GET " + endpoint);
+            requestInFlight.store (true);
+            sessionControlClient.requestProjectAnalysis (endpoint);
+            return;
+        }
+
+        nextFile = analysisUploadState.pendingFiles.removeAndReturn (0);
+        trackIndex = analysisUploadState.uploadedCount;
+        projectSessionId = projectSessionState.projectSessionId;
+        analysisUploadState.state = AnalysisState::uploading;
+        explanationText = "Uploading stem " + nextFile.getFileName() + "...";
+        appendActivityLog ("analysis track upload start | file=" + nextFile.getFileName()
+                           + " | remaining=" + juce::String (analysisUploadState.pendingFiles.size()));
+    }
+
+    juce::ignoreUnused (trackIndex);
+    auto endpoint = buildSessionEndpoint (getServerEndpointText(), "/projects/" + projectSessionId + "/upload");
+    requestInFlight.store (true);
+    sessionControlClient.requestUploadProjectTrack (endpoint, nextFile);
+}
+
 void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::SessionControlResponse& response)
 {
     bool shouldRefreshSession = false;
     bool shouldRefreshHealth = false;
+    bool shouldContinueAnalysisUpload = false;
 
     {
         const juce::ScopedLock scopedLock (statusLock);
@@ -591,7 +797,210 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
 
                 break;
             }
+
+            case volta::SessionRequestType::createAnalysisSession:
+            {
+                if (response.succeeded)
+                {
+                    analysisUploadState.analysisSessionId = response.analysisSessionId;
+                    analysisUploadState.projectSessionId = response.projectSessionId;
+                    analysisUploadState.chatSessionId = response.chatSessionId;
+                    analysisUploadState.state = AnalysisState::uploading;
+                    explanationText = "Analysis session created";
+                    appendActivityLog ("analysis session request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | analysis_session_id=" + response.analysisSessionId
+                                       + " | raw=" + rawResponse);
+                    shouldContinueAnalysisUpload = true;
+                }
+                else
+                {
+                    analysisUploadState.state = AnalysisState::error;
+                    explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Failed to create analysis session";
+                    appendActivityLog ("analysis session request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | error=" + explanationText
+                                       + " | raw=" + rawResponse);
+                }
+
+                break;
+            }
+
+            case volta::SessionRequestType::uploadAnalysisTrack:
+            {
+                if (response.succeeded)
+                {
+                    ++analysisUploadState.uploadedCount;
+                    explanationText = "Uploaded " + juce::String (analysisUploadState.uploadedCount)
+                                      + " / " + juce::String (analysisUploadState.totalFiles) + " stem(s)";
+                    appendActivityLog ("analysis track upload end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | uploaded=" + juce::String (analysisUploadState.uploadedCount)
+                                       + " | raw=" + rawResponse);
+                    shouldContinueAnalysisUpload = true;
+                }
+                else
+                {
+                    analysisUploadState.state = AnalysisState::error;
+                    explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Track upload failed";
+                    appendActivityLog ("analysis track upload end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | error=" + explanationText
+                                       + " | raw=" + rawResponse);
+                }
+
+                break;
+            }
+
+            case volta::SessionRequestType::fetchAnalysisSession:
+            {
+                if (response.succeeded)
+                {
+                    analysisUploadState.state = AnalysisState::completed;
+                    analysisUploadState.analysisSummaryText = response.analysisSummary;
+                    explanationText = "Analysis completed for " + juce::String (response.trackCount) + " stem(s)";
+                    plannedChangesText = response.analysisSummary + "\n\n" + formatAnalysisTrackListText (response.tracks);
+                    appendActivityLog ("analysis result request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | tracks=" + juce::String (response.trackCount)
+                                       + " | raw=" + rawResponse);
+                }
+                else
+                {
+                    analysisUploadState.state = AnalysisState::error;
+                    explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Failed to fetch analysis results";
+                    appendActivityLog ("analysis result request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | error=" + explanationText
+                                       + " | raw=" + rawResponse);
+                }
+
+                break;
+            }
+
+            case volta::SessionRequestType::createProject:
+            {
+                if (response.succeeded)
+                {
+                    projectSessionState.projectSessionId = response.projectSessionId;
+                    projectSessionState.chatSessionId = response.chatSessionId;
+                    projectSessionState.analysisSessionId = response.analysisSessionId;
+                    explanationText = response.explanation.isNotEmpty() ? response.explanation : "Project session created";
+                    appendActivityLog ("project session request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | project_session_id=" + response.projectSessionId
+                                       + " | raw=" + rawResponse);
+
+                    if (projectSessionState.pendingAction == ProjectAction::createAndUploadStems)
+                        shouldContinueAnalysisUpload = true;
+                    else if (projectSessionState.pendingAction == ProjectAction::createAndSendChat)
+                    {
+                        auto endpoint = buildSessionEndpoint (getServerEndpointText(), "/projects/" + projectSessionState.projectSessionId + "/chat");
+                        auto pendingMessage = projectSessionState.pendingChatMessage;
+                        projectSessionState.pendingAction = ProjectAction::none;
+                        requestInFlight.store (true);
+                        appendActivityLog ("project chat request start | POST " + endpoint + " | prompt=" + pendingMessage);
+                        sessionControlClient.requestProjectChat (endpoint, pendingMessage);
+                        return;
+                    }
+                }
+                else
+                {
+                    analysisUploadState.state = AnalysisState::error;
+                    planState = PlanState::error;
+                    explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Failed to create project session";
+                    appendActivityLog ("project session request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | error=" + explanationText
+                                       + " | raw=" + rawResponse);
+                }
+
+                projectSessionState.pendingAction = ProjectAction::none;
+                break;
+            }
+
+            case volta::SessionRequestType::uploadProjectTrack:
+            {
+                if (response.succeeded)
+                {
+                    ++analysisUploadState.uploadedCount;
+                    explanationText = "Uploaded " + juce::String (analysisUploadState.uploadedCount)
+                                      + " / " + juce::String (analysisUploadState.totalFiles) + " stem(s)";
+                    appendActivityLog ("project stem upload end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | uploaded=" + juce::String (analysisUploadState.uploadedCount)
+                                       + " | raw=" + rawResponse);
+                    shouldContinueAnalysisUpload = true;
+                }
+                else
+                {
+                    analysisUploadState.state = AnalysisState::error;
+                    explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Project stem upload failed";
+                    appendActivityLog ("project stem upload end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | error=" + explanationText
+                                       + " | raw=" + rawResponse);
+                }
+
+                break;
+            }
+
+            case volta::SessionRequestType::fetchProjectAnalysis:
+            {
+                if (response.succeeded)
+                {
+                    analysisUploadState.state = AnalysisState::completed;
+                    analysisUploadState.analysisSummaryText = "Project analysis complete";
+                    explanationText = "Analysis completed for " + juce::String (response.trackCount) + " stem(s)";
+                    plannedChangesText = formatAnalysisTrackListText (response.tracks);
+                    appendActivityLog ("project analysis request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | tracks=" + juce::String (response.trackCount)
+                                       + " | raw=" + rawResponse);
+                }
+                else
+                {
+                    analysisUploadState.state = AnalysisState::error;
+                    explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Failed to fetch project analysis";
+                    appendActivityLog ("project analysis request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | error=" + explanationText
+                                       + " | raw=" + rawResponse);
+                }
+
+                break;
+            }
+
+            case volta::SessionRequestType::projectChat:
+            {
+                if (response.succeeded)
+                {
+                    explanationText = response.explanation.isNotEmpty() ? response.explanation : "Reply ready";
+                    plannedChangesText = response.analysisSummary.isNotEmpty() ? response.analysisSummary : plannedChangesText;
+                    planState = PlanState::idle;
+                    appendActivityLog ("project chat request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | raw=" + rawResponse);
+                }
+                else
+                {
+                    planState = PlanState::error;
+                    explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Project chat failed";
+                    appendActivityLog ("project chat request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | error=" + explanationText
+                                       + " | raw=" + rawResponse);
+                }
+
+                break;
+            }
         }
+    }
+
+    if (shouldContinueAnalysisUpload)
+    {
+        uploadNextAnalysisFile();
+        return;
     }
 
     if (shouldRefreshSession)

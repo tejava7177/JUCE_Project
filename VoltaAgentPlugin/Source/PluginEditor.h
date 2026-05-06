@@ -26,6 +26,7 @@ private:
     juce::Label statusValueLabel;
     ControllerView controllerView;
     DebugPanel debugPanel;
+    std::unique_ptr<juce::FileChooser> stemFolderChooser;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VoltaAgentPluginAudioProcessorEditor)
 };

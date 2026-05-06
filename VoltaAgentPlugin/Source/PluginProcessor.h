@@ -24,6 +24,24 @@ public:
         error
     };
 
+    enum class AnalysisState
+    {
+        idle,
+        readyToUpload,
+        creatingSession,
+        uploading,
+        fetchingResults,
+        completed,
+        error
+    };
+
+    enum class ProjectAction
+    {
+        none,
+        createAndUploadStems,
+        createAndSendChat
+    };
+
     VoltaAgentPluginAudioProcessor();
     ~VoltaAgentPluginAudioProcessor() override;
 
@@ -66,13 +84,19 @@ public:
     juce::String getTrackListText() const;
     juce::String getPlannedChangesText() const;
     juce::String getActivityLogText() const;
+    juce::String getStemFolderText() const;
+    juce::String getAnalysisStatusText() const;
+    juce::String getProjectSessionText() const;
     bool canApplyPlan() const;
     bool isRequestInFlight() const;
+    bool canStartAnalysisUpload() const;
     void setCurrentPrompt (const juce::String& promptText);
+    void setStemFolder (const juce::File& folder);
     void requestServerHealth();
     void refreshSession();
     void planActions();
     void applyPlannedActions();
+    void startAnalysisUpload();
 
 private:
     struct SessionSummaryState
@@ -82,15 +106,42 @@ private:
         juce::Array<volta::SessionTrackInfo> tracks;
     };
 
+    struct AnalysisUploadState
+    {
+        AnalysisState state = AnalysisState::idle;
+        juce::File stemFolder;
+        juce::Array<juce::File> pendingFiles;
+        juce::String analysisSessionId;
+        juce::String projectSessionId;
+        juce::String chatSessionId;
+        juce::String analysisSummaryText { "No analysis results yet." };
+        int uploadedCount = 0;
+        int totalFiles = 0;
+    };
+
+    struct ProjectSessionState
+    {
+        juce::String projectSessionId;
+        juce::String chatSessionId;
+        juce::String analysisSessionId;
+        juce::String currentStep;
+        juce::String genre;
+        juce::String pendingChatMessage;
+        ProjectAction pendingAction = ProjectAction::none;
+    };
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     static juce::String buildServerBaseUrl (const juce::String& serverEndpoint);
     static juce::String buildSessionEndpoint (const juce::String& serverEndpoint, const juce::String& pathSuffix);
     static juce::String formatTrackListText (const SessionSummaryState& summaryState);
     static juce::String formatOperationsText (const juce::Array<volta::SessionOperation>& operations);
+    static juce::String formatAnalysisTrackListText (const juce::Array<volta::SessionTrackInfo>& analysisTracks);
     static juce::String sanitizeResponseForLog (const juce::String& responseText);
     static juce::String formatBool (bool value);
     static juce::String getServerStateLabel (ServerState state, int pendingApplyCount);
+    static juce::String getAnalysisStateLabel (const AnalysisUploadState& analysisState);
     void appendActivityLog (const juce::String& line);
+    void uploadNextAnalysisFile();
     void handleSessionControlResponse (const volta::SessionControlResponse& response);
 
     volta::SessionControlClient sessionControlClient;
@@ -106,6 +157,8 @@ private:
     juce::String plannedChangesText { "No planned changes yet." };
     juce::String activityLogText { "Connecting to server..." };
     SessionSummaryState sessionSummary;
+    AnalysisUploadState analysisUploadState;
+    ProjectSessionState projectSessionState;
     juce::Array<volta::SessionOperation> lastPlanOperations;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VoltaAgentPluginAudioProcessor)

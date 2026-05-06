@@ -258,6 +258,259 @@ LLM 대화 전용 세션.
 
 이 분리가 필요한 이유:
 
+## Machine-Readable Action Draft
+
+현재 `VoltaAgentPlugin`은 두 개의 서로 다른 서버 축을 함께 사용하고 있다.
+
+- `POST /projects/*`
+  - stem WAV 업로드
+  - AnalysisSession 기반 분석
+  - ProjectSession 채팅
+- `/scan`, `/session-summary`, `/plan-actions`, `/apply-actions`
+  - Ableton 세션 스캔
+  - 디바이스/파라미터 기반 apply
+
+지금까지는 `/projects/<id>/chat` 응답이 주로 자연어 설명 중심이었다.  
+하지만 최종 목표는 채팅 결과를 **machine-readable action** 으로 바꾸고, 이를 Ableton apply 축과 연결하는 것이다.
+
+### 목표
+
+```text
+사용자 채팅 요청
+  ↓
+ProjectSession chat
+  ↓
+assistant_message + actions[]
+  ↓
+JUCE plugin preview
+  ↓
+Ableton apply 축으로 전달
+  ↓
+M4L / executor가 실제 반영
+```
+
+즉 서버 응답은 앞으로 아래 두 층을 동시에 제공해야 한다.
+
+1. 사람이 읽는 설명
+2. 플러그인이 실행 가능한 구조화된 action 목록
+
+### 응답 초안
+
+예시:
+
+```json
+{
+  "assistant": "기타를 좌우로 나누고 FX 프린트를 별도 버스로 정리하겠습니다.",
+  "current_step": "mechanical_mix",
+  "genre": "Rock",
+  "actions": [
+    {
+      "type": "route_track_to_bus",
+      "track_name": "123 3-Guitar_Intro.wav",
+      "target_bus": "Guitars"
+    },
+    {
+      "type": "route_track_to_bus",
+      "track_name": "123 2-Guitar_Solo.wav",
+      "target_bus": "Guitars"
+    },
+    {
+      "type": "set_pan",
+      "track_name": "123 3-Guitar_Intro.wav",
+      "value": -35
+    },
+    {
+      "type": "set_pan",
+      "track_name": "123 2-Guitar_Solo.wav",
+      "value": 35
+    },
+    {
+      "type": "set_gain_target",
+      "track_name": "123 A-Reverb.wav",
+      "target_peak_dbfs": -19
+    }
+  ]
+}
+```
+
+### 1차 액션 타입 초안
+
+초기 MVP에서는 아래 액션만 먼저 정의하는 것이 적절하다.
+
+#### Session Actions
+
+- `create_bus`
+- `route_track_to_bus`
+- `mute_track`
+- `mark_as_reference`
+- `set_pan`
+- `set_gain_target`
+- `set_hpf`
+
+#### Parameter Actions
+
+- `set_parameter_value`
+- `set_eq_gain`
+- `set_eq_hpf`
+- `set_compressor_threshold`
+- `set_utility_gain`
+
+이 구분이 필요한 이유는 다음과 같다.
+
+- `Session Actions`
+  - 세션 구조, 라우팅, 레퍼런스 관리, 팬/게인 같은 정리 단계
+- `Parameter Actions`
+  - 기존 `/apply-actions` 축과 더 직접적으로 연결되는 장치/파라미터 조정
+
+### 액션 스키마 초안
+
+공통 필드:
+
+```json
+{
+  "id": "action_001",
+  "type": "set_pan",
+  "scope": "session",
+  "track_name": "123 3-Guitar_Intro.wav",
+  "confidence": 0.92,
+  "reason": "인트로 기타를 좌측에 배치해 스테레오 분리를 만듭니다."
+}
+```
+
+타입별 필드 예시:
+
+#### `create_bus`
+
+```json
+{
+  "type": "create_bus",
+  "bus_name": "Guitars"
+}
+```
+
+#### `route_track_to_bus`
+
+```json
+{
+  "type": "route_track_to_bus",
+  "track_name": "123 2-Guitar_Solo.wav",
+  "target_bus": "Guitars"
+}
+```
+
+#### `set_pan`
+
+```json
+{
+  "type": "set_pan",
+  "track_name": "123 2-Guitar_Solo.wav",
+  "value": 35,
+  "unit": "percent"
+}
+```
+
+#### `set_gain_target`
+
+```json
+{
+  "type": "set_gain_target",
+  "track_name": "123 1-Dr_PercLoop.wav",
+  "target_peak_dbfs": -9.0
+}
+```
+
+#### `set_hpf`
+
+```json
+{
+  "type": "set_hpf",
+  "track_name": "123 A-Reverb.wav",
+  "frequency_hz": 180.0,
+  "slope_db_per_oct": 12
+}
+```
+
+### JUCE 플러그인에서의 역할
+
+`VoltaAgentPlugin`은 이 액션들을 바로 실행하지 않고, 우선 아래 순서로 다룬다.
+
+1. `assistant` 메시지를 채팅 UI에 표시
+2. `actions[]`를 preview 카드에 구조적으로 표시
+3. 사용자 승인 시 apply 축으로 전달
+4. apply 결과를 activity log 와 채팅에 다시 반영
+
+즉 플러그인의 역할은 단순 렌더링이 아니라:
+
+- 채팅 결과 해석
+- action preview
+- 승인/거절
+- apply orchestration
+
+까지 포함한다.
+
+### Ableton apply 축과의 연결 초안
+
+초기에는 아래 두 방식 중 하나를 선택할 수 있다.
+
+#### 옵션 A. 기존 `/apply-actions` 확장
+
+- 장점:
+  - 기존 apply 경로 재사용 가능
+- 단점:
+  - 현재 `/apply-actions`가 파라미터 중심이라 세션 구조 액션과 맞지 않을 수 있음
+
+#### 옵션 B. 별도 apply endpoint 추가
+
+예:
+
+```text
+POST /projects/<id>/apply
+```
+
+- 장점:
+  - `ProjectSession` 기반 structured action 과 의미적으로 더 잘 맞음
+- 단점:
+  - 새 executor 경로 정의 필요
+
+현 시점 초안으로는 **옵션 B**가 더 자연스럽다.
+
+### 구현 단계 제안
+
+#### 단계 1
+
+- `/projects/<id>/chat` 응답에 `actions[]` 추가
+- JUCE plugin 은 preview 만 표시
+
+#### 단계 2
+
+- `actions[]` 승인 UI 추가
+- action 타입별 표시 형식 정리
+
+#### 단계 3
+
+- `actions[]`를 Ableton apply 축으로 전달
+- M4L / executor 가 실제 트랙/버스/파라미터 반영
+
+#### 단계 4
+
+- apply 결과를 다시 채팅 세션에 반영
+- 예:
+  - 성공
+  - 일부 실패
+  - 사용자 확인 필요
+
+### 현재 한계
+
+- 현재 `/projects/<id>/chat`은 자연어 응답 중심
+- 현재 `/apply-actions`는 세션 구조 변경보다 파라미터 변경에 더 적합
+- stem 분석 기준의 track name 과 Ableton scan 기준 track name 의 매핑 정책이 아직 필요
+- bus 생성, 라우팅, reference 관리 같은 액션은 아직 executor 스펙이 없음
+
+### 한 줄 요약
+
+다음 단계의 핵심은  
+`ProjectSession chat 결과를 assistant_message + actions[] 구조로 확장하고, 이 actions[]를 Ableton apply 축과 연결하는 것`이다.
+
 - LLM 채팅은 대화 맥락 관리에 집중
 - 음악 분석은 파일, waveform, feature, 분석 결과 관리에 집중
 - 이후 trim, EQ, compressor, panning, grouping 등 12개 기능이 같은 분석 데이터를 재사용 가능

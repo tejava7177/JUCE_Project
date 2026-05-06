@@ -29,6 +29,30 @@ VoltaAgentPluginAudioProcessorEditor::VoltaAgentPluginAudioProcessorEditor (Volt
         resized();
     };
 
+    controllerView.onChooseStemFolder = [this]
+    {
+        stemFolderChooser = std::make_unique<juce::FileChooser> ("Select stem folder",
+                                                                 audioProcessor.getStemFolderText().isNotEmpty()
+                                                                     ? juce::File (audioProcessor.getStemFolderText())
+                                                                     : juce::File::getSpecialLocation (juce::File::userHomeDirectory));
+
+        auto flags = juce::FileBrowserComponent::openMode
+                   | juce::FileBrowserComponent::canSelectDirectories;
+
+        stemFolderChooser->launchAsync (flags, [this] (const juce::FileChooser& chooser)
+        {
+            auto folder = chooser.getResult();
+
+            if (folder.isDirectory())
+            {
+                audioProcessor.setStemFolder (folder);
+                refreshLayoutAndState();
+            }
+
+            stemFolderChooser.reset();
+        });
+    };
+
     startTimerHz (8);
     refreshLayoutAndState();
 }
@@ -63,7 +87,11 @@ void VoltaAgentPluginAudioProcessorEditor::resized()
     area.removeFromTop (14);
 
     auto debugHeight = debugPanel.getPreferredHeight();
-    auto contentHeight = juce::jmax (150, area.getHeight() - debugHeight - 14);
+    constexpr int minControllerHeight = 440;
+    if (area.getHeight() - debugHeight - 14 < minControllerHeight)
+        debugHeight = juce::jmax (52, area.getHeight() - minControllerHeight - 14);
+
+    auto contentHeight = juce::jmax (minControllerHeight, area.getHeight() - debugHeight - 14);
     auto contentArea = area.removeFromTop (contentHeight);
     controllerView.setBounds (contentArea);
 

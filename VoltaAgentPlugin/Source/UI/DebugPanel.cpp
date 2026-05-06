@@ -30,6 +30,7 @@ DebugPanel::DebugPanel (VoltaAgentPluginAudioProcessor& processor)
     endpointEditor.addListener (this);
 
     configureSectionLabel (serverLabel, "Server / Session");
+    configureSectionLabel (projectLabel, "Project Session");
     configureSectionLabel (tracksLabel, "Tracks");
     configureSectionLabel (explanationLabel, "Latest Explanation / Preview");
     configureSectionLabel (activityLabel, "Activity Log");
@@ -42,6 +43,8 @@ DebugPanel::DebugPanel (VoltaAgentPluginAudioProcessor& processor)
     addChildComponent (endpointEditor);
     addChildComponent (serverLabel);
     addChildComponent (sessionLabel);
+    addChildComponent (projectLabel);
+    addChildComponent (projectValueLabel);
     addChildComponent (refreshSessionButton);
     addChildComponent (tracksLabel);
     addChildComponent (tracksEditor);
@@ -95,7 +98,13 @@ void DebugPanel::resized()
     refreshSessionButton.setBounds (statusRow.removeFromLeft (160));
 
     area.removeFromTop (10);
-    auto upper = area.removeFromTop (170);
+    projectLabel.setBounds (area.removeFromTop (22));
+    area.removeFromTop (6);
+    projectValueLabel.setBounds (area.removeFromTop (32));
+    area.removeFromTop (10);
+
+    auto upperHeight = juce::jmin (132, juce::jmax (96, area.getHeight() / 2 - 12));
+    auto upper = area.removeFromTop (upperHeight);
     auto lower = area;
 
     auto upperLeft = upper.removeFromLeft (juce::jmax (280, upper.getWidth() / 2 - 6));
@@ -121,6 +130,11 @@ void DebugPanel::refreshState()
     sessionLabel.setText ("Server: " + audioProcessor.getServerStatusText()
                               + " | Session: " + audioProcessor.getSessionStatusText(),
                           juce::dontSendNotification);
+    projectValueLabel.setText ("Project: " + audioProcessor.getProjectSessionText()
+                                   + " | Stem folder: "
+                                   + (audioProcessor.getStemFolderText().isNotEmpty() ? audioProcessor.getStemFolderText() : "Not selected")
+                                   + " | Analysis: " + audioProcessor.getAnalysisStatusText(),
+                               juce::dontSendNotification);
     tracksEditor.setText (audioProcessor.getTrackListText(), juce::dontSendNotification);
     explanationEditor.setText ("Explanation:\n" + audioProcessor.getExplanationText()
                                    + "\n\nPreview:\n" + audioProcessor.getPlannedChangesText(),
@@ -131,7 +145,7 @@ void DebugPanel::refreshState()
 
 int DebugPanel::getPreferredHeight() const
 {
-    return expanded ? 510 : 52;
+    return expanded ? 360 : 52;
 }
 
 void DebugPanel::buttonClicked (juce::Button* button)
@@ -175,6 +189,8 @@ void DebugPanel::updateVisibility()
     endpointEditor.setVisible (expanded);
     serverLabel.setVisible (expanded);
     sessionLabel.setVisible (expanded);
+    projectLabel.setVisible (expanded);
+    projectValueLabel.setVisible (expanded);
     refreshSessionButton.setVisible (expanded);
     tracksLabel.setVisible (expanded);
     tracksEditor.setVisible (expanded);

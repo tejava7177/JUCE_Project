@@ -233,7 +233,7 @@ private:
                 return 30000;
 
             case SessionRequestType::projectChat:
-                return 60000;
+                return 120000;
         }
 
         return 4000;

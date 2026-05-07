@@ -267,6 +267,12 @@ juce::String VoltaAgentPluginAudioProcessor::getProjectSessionText() const
     return fields.joinIntoString (" | ");
 }
 
+juce::String VoltaAgentPluginAudioProcessor::getLastSubmittedPromptText() const
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    return lastSubmittedPrompt;
+}
+
 bool VoltaAgentPluginAudioProcessor::canApplyPlan() const
 {
     const juce::ScopedLock scopedLock (statusLock);
@@ -346,6 +352,8 @@ void VoltaAgentPluginAudioProcessor::planActions()
         }
 
         planState = PlanState::planning;
+        lastSubmittedPrompt = promptText;
+        currentPrompt.clear();
         explanationText = "Planning changes...";
         plannedChangesText = "Waiting for plan response...";
 

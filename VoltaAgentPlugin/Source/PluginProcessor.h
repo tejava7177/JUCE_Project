@@ -87,6 +87,7 @@ public:
     juce::String getStemFolderText() const;
     juce::String getAnalysisStatusText() const;
     juce::String getProjectSessionText() const;
+    juce::String getLastSubmittedPromptText() const;
     bool canApplyPlan() const;
     bool isRequestInFlight() const;
     bool canStartAnalysisUpload() const;
@@ -152,6 +153,7 @@ private:
     int pendingApplyCount = 0;
     int lastApplyRevision = 0;
     juce::String currentPrompt;
+    juce::String lastSubmittedPrompt;
     juce::String explanationText { "Connecting to server..." };
     juce::String trackListText { "No session loaded." };
     juce::String plannedChangesText { "No planned changes yet." };

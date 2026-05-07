@@ -22,43 +22,31 @@ private:
     void buttonClicked (juce::Button* button) override;
     void textEditorTextChanged (juce::TextEditor& editor) override;
     void textEditorReturnKeyPressed (juce::TextEditor& editor) override;
-    void setSuggestedPrompt (const juce::String& promptText);
-    juce::String buildChatTranscript (const juce::String& promptText,
-                                      const juce::String& sessionStatus,
-                                      const juce::String& explanation) const;
-    juce::String buildStepStatus (const juce::String& serverStatus,
-                                  const juce::String& sessionStatus,
-                                  const juce::String& analysisStatus) const;
-    bool shouldShowAssistantReply (const juce::String& explanation,
-                                   const juce::String& serverStatus) const;
-    juce::String buildAssistantStatusLine (const juce::String& analysisStatus,
-                                           const juce::String& sessionStatus) const;
+    juce::String buildProgressText (const juce::String& serverStatus,
+                                    const juce::String& sessionStatus,
+                                    const juce::String& analysisStatus) const;
+    juce::String buildAssistantText (const juce::String& explanation,
+                                     const juce::String& sessionStatus,
+                                     const juce::String& analysisStatus) const;
+    bool isWaitingState (const juce::String& analysisStatus) const;
+    void sendCurrentPrompt();
 
     VoltaAgentPluginAudioProcessor& audioProcessor;
 
-    juce::Label stepTitle;
-    juce::Label stepValue;
+    juce::Label progressTitle;
+    juce::Label progressValue;
     juce::Label stemFolderTitle;
     juce::Label stemFolderValue;
     juce::TextButton chooseStemFolderButton { "Choose Stem Folder" };
     juce::TextButton analyzeStemsButton { "Analyze WAV Stems" };
 
-    juce::Label chatTitle;
-    juce::TextEditor chatTranscript;
-
-    juce::Label actionTitle;
-    juce::TextButton trackLengthButton { "K-pop" };
-    juce::TextButton groupingButton { "Hip-hop" };
-    juce::TextButton gainBalanceButton { "Rock" };
-    juce::TextButton eqPrepButton { "R&B" };
-
-    juce::Label promptTitle;
+    juce::Label assistantTitle;
+    juce::TextEditor assistantBubble;
+    juce::Label userTitle;
+    juce::TextEditor userBubble;
+    juce::Label composerTitle;
     juce::TextEditor promptEditor;
-    juce::TextButton planButton { "Start Session" };
-    juce::TextButton applyButton { "Apply Staged" };
-
-    juce::Label explanationTitle;
-    juce::TextEditor explanationValue;
+    juce::TextButton planButton { "Send" };
 
     juce::Label plannedChangesTitle;
     juce::TextEditor plannedChangesValue;

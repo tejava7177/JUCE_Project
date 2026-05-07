@@ -14,7 +14,7 @@
 
 # Plugin binaries
 **/*.component
-**/*.vst3
+
 **/*.app
 **/*.dylib
 

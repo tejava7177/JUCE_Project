@@ -983,15 +983,30 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
             {
                 if (response.succeeded)
                 {
+                    lastPlanOperations = response.operations;
                     explanationText = response.explanation.isNotEmpty() ? response.explanation : "Reply ready";
-                    plannedChangesText = response.analysisSummary.isNotEmpty() ? response.analysisSummary : plannedChangesText;
-                    planState = PlanState::idle;
+                    if (! lastPlanOperations.isEmpty())
+                    {
+                        auto operationText = formatOperationsText (lastPlanOperations);
+                        if (response.analysisSummary.isNotEmpty())
+                            plannedChangesText = response.analysisSummary + "\n\n" + operationText;
+                        else
+                            plannedChangesText = operationText;
+                        planState = PlanState::planReady;
+                    }
+                    else
+                    {
+                        plannedChangesText = response.analysisSummary.isNotEmpty() ? response.analysisSummary : plannedChangesText;
+                        planState = PlanState::idle;
+                    }
                     appendActivityLog ("project chat request end | http " + juce::String (response.statusCode)
                                        + " | parse=" + parseSuccess
+                                       + " | operations=" + juce::String (lastPlanOperations.size())
                                        + " | raw=" + rawResponse);
                 }
                 else
                 {
+                    lastPlanOperations.clear();
                     planState = PlanState::error;
                     explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Project chat failed";
                     appendActivityLog ("project chat request end | http " + juce::String (response.statusCode)

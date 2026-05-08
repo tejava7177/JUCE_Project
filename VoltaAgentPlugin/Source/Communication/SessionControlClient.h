@@ -745,6 +745,31 @@ private:
         response.parseSucceeded = true;
         response.explanation = object->getProperty ("assistant").toString();
         response.status = object->getProperty ("current_step").toString();
+
+        if (auto operationsValue = object->getProperty ("operations"); operationsValue.isArray())
+        {
+            if (auto* operationsArray = operationsValue.getArray())
+            {
+                for (const auto& entry : *operationsArray)
+                {
+                    if (auto* operationObject = entry.getDynamicObject())
+                    {
+                        SessionOperation operation;
+                        operation.track = operationObject->getProperty ("track").toString();
+                        if (operation.track.isEmpty())
+                            operation.track = operationObject->getProperty ("track_name").toString();
+                        operation.device = operationObject->getProperty ("device").toString();
+                        operation.parameter = operationObject->getProperty ("parameter").toString();
+                        operation.path = operationObject->getProperty ("path").toString();
+                        operation.oldValue = static_cast<double> (operationObject->getProperty ("old_value"));
+                        operation.newValue = static_cast<double> (operationObject->getProperty ("new_value"));
+                        operation.value = static_cast<double> (operationObject->getProperty ("value"));
+                        response.operations.add (operation);
+                    }
+                }
+            }
+        }
+
         if (auto toolsValue = object->getProperty ("tool_calls"); toolsValue.isArray())
         {
             if (auto* toolsArray = toolsValue.getArray())
@@ -761,6 +786,9 @@ private:
                 response.analysisSummary = toolLines.joinIntoString ("\n");
             }
         }
+
+        if (response.analysisSummary.isEmpty())
+            response.analysisSummary = object->getProperty ("operation_summary").toString();
 
         if (statusCode >= 200 && statusCode < 300)
         {

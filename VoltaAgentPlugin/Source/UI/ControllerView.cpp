@@ -3,6 +3,16 @@
 
 namespace
 {
+const auto panelColour = juce::Colour::fromRGB (22, 26, 31);
+const auto cardColour = juce::Colour::fromRGB (32, 36, 43);
+const auto cardAltColour = juce::Colour::fromRGB (38, 43, 51);
+const auto accentColour = juce::Colour::fromRGB (87, 225, 193);
+const auto accentMutedColour = juce::Colour::fromRGB (43, 86, 83);
+const auto outlineColour = juce::Colour::fromRGBA (255, 255, 255, 18);
+const auto textColour = juce::Colour::fromRGB (235, 240, 244);
+const auto subtleTextColour = juce::Colour::fromRGB (162, 173, 181);
+const auto successColour = juce::Colour::fromRGB (92, 199, 120);
+
 void configureReadOnlyArea (juce::TextEditor& editor)
 {
     editor.setMultiLine (true);
@@ -11,6 +21,8 @@ void configureReadOnlyArea (juce::TextEditor& editor)
     editor.setCaretVisible (false);
     editor.setPopupMenuEnabled (false);
     editor.setIndents (12, 12);
+    editor.setColour (juce::TextEditor::textColourId, textColour);
+    editor.setColour (juce::TextEditor::highlightedTextColourId, textColour);
 }
 
 void configureCardLabel (juce::Label& label, const juce::String& text)
@@ -18,6 +30,7 @@ void configureCardLabel (juce::Label& label, const juce::String& text)
     label.setText (text, juce::dontSendNotification);
     label.setJustificationType (juce::Justification::centredLeft);
     label.setFont (juce::FontOptions (15.0f, juce::Font::bold));
+    label.setColour (juce::Label::textColourId, textColour);
 }
 
 void configureBubbleArea (juce::TextEditor& editor, juce::Colour background)
@@ -25,6 +38,15 @@ void configureBubbleArea (juce::TextEditor& editor, juce::Colour background)
     configureReadOnlyArea (editor);
     editor.setColour (juce::TextEditor::backgroundColourId, background);
     editor.setColour (juce::TextEditor::outlineColourId, juce::Colour::fromRGBA (255, 255, 255, 0));
+}
+
+void configureEditorSurface (juce::TextEditor& editor, juce::Colour background)
+{
+    editor.setColour (juce::TextEditor::backgroundColourId, background);
+    editor.setColour (juce::TextEditor::outlineColourId, juce::Colour::fromRGBA (255, 255, 255, 0));
+    editor.setColour (juce::TextEditor::textColourId, textColour);
+    editor.setColour (juce::CaretComponent::caretColourId, accentColour);
+    editor.setIndents (12, 12);
 }
 
 juce::String korean (const char* escapedUnicode)
@@ -71,42 +93,50 @@ juce::String previewPlaceholder()
 {
     return korean ("\xEC\x95\x84\xEC\xA7\x81 \xEC\xA0\x81\xEC\x9A\xA9\xED\x95\xA0 \xEA\xB3\x84\xED\x9A\x8D\xEC\x9D\xB4 \xEC\x97\x86\xEC\x8A\xB5\xEB\x8B\x88\xEB\x8B\xA4.");
 }
+
+void drawPanel (juce::Graphics& g, juce::Rectangle<int> area, juce::Colour fill, float cornerSize = 14.0f)
+{
+    g.setColour (fill);
+    g.fillRoundedRectangle (area.toFloat(), cornerSize);
+    g.setColour (outlineColour);
+    g.drawRoundedRectangle (area.toFloat(), cornerSize, 1.0f);
+}
 }
 
 ControllerView::ControllerView (VoltaAgentPluginAudioProcessor& processor)
     : audioProcessor (processor)
 {
-    configureCardLabel (progressTitle, "Status");
-    configureCardLabel (stemFolderTitle, "Stem Folder");
-    configureCardLabel (assistantTitle, "Assistant");
-    configureCardLabel (userTitle, "Your Request");
-    configureCardLabel (composerTitle, korean ("\xEB\xA9\x94\xEC\x8B\x9C\xEC\xA7\x80"));
-    configureCardLabel (plannedChangesTitle, "Action Preview");
+    configureCardLabel (progressTitle, korean ("\xEC\xA7\x80\xEA\xB8\x88 AI\xEA\xB0\x80 \xED\x95\x98\xEB\x8A\x94 \xEC\x9E\x91\xEC\x97\x85"));
+    configureCardLabel (stemFolderTitle, "WAV Folder");
+    configureCardLabel (assistantTitle, korean ("\xEC\x8B\xA4\xED\x96\x89 \xEA\xB2\xB0\xEA\xB3\xBC"));
+    configureCardLabel (userTitle, korean ("\xEC\xA7\x81\xEC\xA0\x84 \xEC\x9A\x94\xEC\xB2\xAD"));
+    configureCardLabel (composerTitle, korean ("\xEC\xB1\x84\xED\x8C\x85 \xEC\x9E\x85\xEB\xA0\xA5"));
+    configureCardLabel (plannedChangesTitle, korean ("\xEA\xB3\xA1 \xEB\xB6\x84\xEC\x84\x9D \xEC\x84\xB8\xEC\x85\x98 Alert"));
+    configureCardLabel (chatTitle, korean ("\xEC\xB1\x84\xED\x8C\x85"));
 
-    progressValue.setJustificationType (juce::Justification::centredLeft);
-    progressValue.setFont (juce::FontOptions (14.0f, juce::Font::bold));
-    progressValue.setColour (juce::Label::backgroundColourId, juce::Colour::fromRGB (34, 46, 52));
-    progressValue.setColour (juce::Label::outlineColourId, juce::Colour::fromRGBA (255, 255, 255, 0));
-    progressValue.setBorderSize (juce::BorderSize<int> (8, 12, 8, 12));
+    progressValue.setJustificationType (juce::Justification::topLeft);
+    progressValue.setFont (juce::FontOptions (18.0f, juce::Font::bold));
+    progressValue.setColour (juce::Label::textColourId, textColour);
+    progressValue.setBorderSize (juce::BorderSize<int> (4, 0, 0, 0));
 
     stemFolderValue.setJustificationType (juce::Justification::centredLeft);
     stemFolderValue.setFont (juce::FontOptions (14.0f, juce::Font::plain));
-    stemFolderValue.setColour (juce::Label::backgroundColourId, juce::Colour::fromRGB (34, 46, 52));
-    stemFolderValue.setColour (juce::Label::outlineColourId, juce::Colour::fromRGBA (255, 255, 255, 0));
-    stemFolderValue.setBorderSize (juce::BorderSize<int> (8, 12, 8, 12));
+    stemFolderValue.setColour (juce::Label::textColourId, textColour);
 
     promptEditor.setMultiLine (true);
     promptEditor.setReturnKeyStartsNewLine (false);
     promptEditor.addListener (this);
-    promptEditor.setColour (juce::TextEditor::backgroundColourId, juce::Colour::fromRGB (34, 46, 52));
+    configureEditorSurface (promptEditor, cardAltColour);
 
-    configureBubbleArea (assistantBubble, juce::Colour::fromRGB (34, 46, 52));
-    configureBubbleArea (userBubble, juce::Colour::fromRGB (42, 58, 66));
-    configureBubbleArea (plannedChangesValue, juce::Colour::fromRGB (34, 46, 52));
+    configureBubbleArea (assistantBubble, cardColour);
+    configureBubbleArea (userBubble, cardAltColour);
+    configureBubbleArea (plannedChangesValue, cardColour);
 
     planButton.addListener (this);
     chooseStemFolderButton.addListener (this);
     analyzeStemsButton.addListener (this);
+    chooseStemFolderButton.setButtonText (korean ("\xED\x8F\xB4\xEB\x8D\x94 \xEC\xB6\x94\xEA\xB0\x80"));
+    analyzeStemsButton.setButtonText ("Analyze WAV Stems");
 
     addAndMakeVisible (progressTitle);
     addAndMakeVisible (progressValue);
@@ -121,6 +151,7 @@ ControllerView::ControllerView (VoltaAgentPluginAudioProcessor& processor)
     addAndMakeVisible (composerTitle);
     addAndMakeVisible (promptEditor);
     addAndMakeVisible (planButton);
+    addAndMakeVisible (chatTitle);
     addAndMakeVisible (plannedChangesTitle);
     addAndMakeVisible (plannedChangesValue);
 
@@ -138,75 +169,118 @@ ControllerView::~ControllerView()
 void ControllerView::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    g.setColour (juce::Colour::fromRGBA (255, 255, 255, 16));
-    g.fillRoundedRectangle (bounds, 12.0f);
-    g.setColour (juce::Colour::fromRGBA (87, 225, 193, 70));
-    g.drawRoundedRectangle (bounds, 12.0f, 1.0f);
+    g.setColour (panelColour);
+    g.fillRoundedRectangle (bounds, 18.0f);
+    g.setColour (juce::Colour::fromRGBA (255, 255, 255, 12));
+    g.drawRoundedRectangle (bounds, 18.0f, 1.0f);
 
-    auto area = getLocalBounds().reduced (14);
-    auto header = area.removeFromTop (92);
-    area.removeFromTop (12);
-    auto chat = area.removeFromTop (270);
-    area.removeFromTop (12);
-    auto composer = area.removeFromTop (120);
-    area.removeFromTop (12);
-    auto preview = area;
+    auto area = getLocalBounds().reduced (18);
+    auto content = area;
+    auto chatColumn = content.removeFromRight (juce::jmax (270, content.getWidth() / 4));
+    content.removeFromRight (14);
+    auto workspaceColumn = content;
 
-    g.setColour (juce::Colour::fromRGBA (255, 255, 255, 10));
-    g.fillRoundedRectangle (header.toFloat(), 10.0f);
-    g.fillRoundedRectangle (chat.toFloat(), 10.0f);
-    g.fillRoundedRectangle (composer.toFloat(), 10.0f);
-    g.fillRoundedRectangle (preview.toFloat(), 10.0f);
+    auto heroCard = workspaceColumn.removeFromTop (juce::jmax (280, (workspaceColumn.getHeight() * 7) / 10));
+    workspaceColumn.removeFromTop (14);
+    auto bottomRow = workspaceColumn;
+    auto stepCard = bottomRow.removeFromLeft (juce::jmax (140, bottomRow.getWidth() / 5));
+    bottomRow.removeFromLeft (14);
+    auto keepCard = bottomRow.removeFromLeft (juce::jmax (180, bottomRow.getWidth() / 3));
+    bottomRow.removeFromLeft (14);
+    auto alertCard = bottomRow;
+
+    drawPanel (g, heroCard, cardColour, 16.0f);
+    drawPanel (g, chatColumn, cardColour, 16.0f);
+    drawPanel (g, stepCard, cardAltColour, 14.0f);
+    drawPanel (g, keepCard, cardAltColour, 14.0f);
+    drawPanel (g, alertCard, cardAltColour, 14.0f);
+
+    auto uploadFill = dragOverUploadZone ? accentMutedColour.brighter (0.2f) : panelColour.brighter (0.04f);
+    g.setColour (uploadFill);
+    g.fillRoundedRectangle (chatUploadBounds.toFloat(), 12.0f);
+    g.setColour (dragOverUploadZone ? accentColour : juce::Colour::fromRGBA (87, 225, 193, 90));
+    g.drawRoundedRectangle (chatUploadBounds.toFloat(), 12.0f, dragOverUploadZone ? 2.0f : 1.4f);
+
+    auto uploadTextArea = chatUploadBounds.reduced (16);
+    g.setColour (textColour);
+    g.setFont (juce::FontOptions (15.0f, juce::Font::bold));
+    g.drawText (korean ("WAV \xED\x8F\xB4\xEB\x8D\x94 \xEB\x93\x9C\xEB\xA1\xAD \xEB\x98\x90\xEB\x8A\x94 \xEC\xB6\x94\xEA\xB0\x80"),
+                uploadTextArea.removeFromTop (24),
+                juce::Justification::centredLeft,
+                true);
+    g.setFont (juce::FontOptions (13.0f, juce::Font::plain));
+    g.setColour (subtleTextColour);
+    g.drawText (attachedFolderHeadline, uploadTextArea.removeFromTop (22), juce::Justification::centredLeft, true);
+    g.setColour (dragOverUploadZone ? accentColour : subtleTextColour);
+    g.drawText (attachedFolderMeta, uploadTextArea, juce::Justification::topLeft, true);
+
+    auto chipBounds = chatUploadBounds.withTrimmedTop (chatUploadBounds.getHeight() - 28).reduced (14, 0).removeFromLeft (juce::jmin (chatUploadBounds.getWidth() - 28, 170));
+    g.setColour (analysisUploadStateMeta.startsWith ("0 wav") ? cardAltColour.brighter (0.1f) : successColour.withAlpha (0.18f));
+    g.fillRoundedRectangle (chipBounds.toFloat(), 10.0f);
+    g.setColour (analysisUploadStateMeta.startsWith ("0 wav") ? subtleTextColour : successColour);
+    g.drawRoundedRectangle (chipBounds.toFloat(), 10.0f, 1.0f);
+    g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+    g.drawText (analysisUploadStateMeta, chipBounds.reduced (10, 0), juce::Justification::centredLeft, true);
 }
 
 void ControllerView::resized()
 {
     auto area = getLocalBounds().reduced (18);
+    auto content = area;
+    auto chatColumn = content.removeFromRight (juce::jmax (270, content.getWidth() / 4));
+    content.removeFromRight (14);
+    auto workspaceColumn = content;
 
-    auto header = area.removeFromTop (92);
-    area.removeFromTop (12);
-    auto chat = area.removeFromTop (270);
-    area.removeFromTop (12);
-    auto composer = area.removeFromTop (120);
-    area.removeFromTop (12);
-    auto preview = area;
+    auto heroCard = workspaceColumn.removeFromTop (juce::jmax (280, (workspaceColumn.getHeight() * 7) / 10));
+    workspaceColumn.removeFromTop (14);
+    auto bottomRow = workspaceColumn;
+    auto stepCard = bottomRow.removeFromLeft (juce::jmax (140, bottomRow.getWidth() / 5));
+    bottomRow.removeFromLeft (14);
+    auto keepCard = bottomRow.removeFromLeft (juce::jmax (180, bottomRow.getWidth() / 3));
+    bottomRow.removeFromLeft (14);
+    auto alertCard = bottomRow;
 
-    progressTitle.setBounds (header.removeFromTop (24));
-    header.removeFromTop (6);
-    progressValue.setBounds (header.removeFromTop (34));
-    header.removeFromTop (10);
+    auto heroContent = heroCard.reduced (18);
+    progressTitle.setBounds (heroContent.removeFromTop (26));
+    heroContent.removeFromTop (8);
+    progressValue.setBounds (heroContent.removeFromTop (78));
+    heroContent.removeFromTop (12);
+    assistantTitle.setBounds (heroContent.removeFromTop (24));
+    heroContent.removeFromTop (8);
+    assistantBubble.setBounds (heroContent);
 
-    auto stemRow = header.removeFromTop (36);
-    stemFolderTitle.setBounds (stemRow.removeFromLeft (100));
-    stemFolderValue.setBounds (stemRow.removeFromLeft (juce::jmax (220, stemRow.getWidth() - 360)));
-    stemRow.removeFromLeft (8);
-    chooseStemFolderButton.setBounds (stemRow.removeFromLeft (160));
-    stemRow.removeFromLeft (8);
-    analyzeStemsButton.setBounds (stemRow);
+    auto stepContent = stepCard.reduced (16);
+    stemFolderTitle.setBounds (stepContent.removeFromTop (22));
+    stepContent.removeFromTop (6);
+    stemFolderValue.setBounds (stepContent);
 
-    auto assistantArea = chat.removeFromLeft ((chat.getWidth() * 2) / 3);
-    chat.removeFromLeft (12);
-    auto userArea = chat;
+    auto keepContent = keepCard.reduced (16);
+    keepContent.removeFromTop (8);
+    chooseStemFolderButton.setBounds (keepContent.removeFromTop (34));
+    keepContent.removeFromTop (10);
+    analyzeStemsButton.setBounds (keepContent.removeFromTop (34));
 
-    assistantTitle.setBounds (assistantArea.removeFromTop (24));
-    assistantArea.removeFromTop (8);
-    assistantBubble.setBounds (assistantArea);
+    auto alertContent = alertCard.reduced (16);
+    plannedChangesTitle.setBounds (alertContent.removeFromTop (22));
+    alertContent.removeFromTop (8);
+    plannedChangesValue.setBounds (alertContent);
 
-    userTitle.setBounds (userArea.removeFromTop (24));
-    userArea.removeFromTop (8);
-    userBubble.setBounds (userArea);
+    auto chatContent = chatColumn.reduced (16);
+    chatTitle.setBounds (chatContent.removeFromTop (26));
+    chatContent.removeFromTop (10);
+    chatUploadBounds = chatContent.removeFromTop (110);
+    chatContent.removeFromTop (12);
 
-    composerTitle.setBounds (composer.removeFromTop (24));
-    composer.removeFromTop (8);
-    promptEditor.setBounds (composer.removeFromTop (74));
-    composer.removeFromTop (8);
-    auto sendRow = composer.removeFromTop (36);
-    auto sendButtonArea = sendRow.removeFromRight (160);
-    planButton.setBounds (sendButtonArea.withSizeKeepingCentre (160, 32));
-
-    plannedChangesTitle.setBounds (preview.removeFromTop (24));
-    preview.removeFromTop (8);
-    plannedChangesValue.setBounds (preview);
+    userTitle.setBounds (chatContent.removeFromTop (22));
+    chatContent.removeFromTop (6);
+    userBubble.setBounds (chatContent.removeFromTop (juce::jmax (90, chatContent.getHeight() / 4)));
+    chatContent.removeFromTop (10);
+    composerTitle.setBounds (chatContent.removeFromTop (22));
+    chatContent.removeFromTop (6);
+    auto inputArea = chatContent.removeFromTop (juce::jmax (120, chatContent.getHeight() - 44));
+    promptEditor.setBounds (inputArea);
+    chatContent.removeFromTop (10);
+    planButton.setBounds (chatContent.removeFromTop (34).removeFromRight (120));
 }
 
 void ControllerView::refreshState()
@@ -217,9 +291,10 @@ void ControllerView::refreshState()
     auto analysisStatus = audioProcessor.getAnalysisStatusText();
     auto explanation = audioProcessor.getExplanationText();
     auto plannedChanges = audioProcessor.getPlannedChangesText();
+    auto stemFolderPath = audioProcessor.getStemFolderText();
 
     progressValue.setText (buildProgressText (serverStatus, sessionStatus, analysisStatus), juce::dontSendNotification);
-    stemFolderValue.setText (audioProcessor.getStemFolderText().isNotEmpty() ? audioProcessor.getStemFolderText() : "No folder selected", juce::dontSendNotification);
+    stemFolderValue.setText (stemFolderPath.isNotEmpty() ? juce::File (stemFolderPath).getFileName() : "No folder", juce::dontSendNotification);
     assistantBubble.setText (buildAssistantText (explanation, sessionStatus, analysisStatus), juce::dontSendNotification);
     userBubble.setText (audioProcessor.getLastSubmittedPromptText().isNotEmpty() ? audioProcessor.getLastSubmittedPromptText() : noUserPromptLine(),
                         juce::dontSendNotification);
@@ -228,12 +303,76 @@ void ControllerView::refreshState()
     if (promptEditor.getText() != promptText)
         promptEditor.setText (promptText, juce::dontSendNotification);
 
+    if (stemFolderPath.isNotEmpty())
+    {
+        auto folder = juce::File (stemFolderPath);
+        auto wavCount = countWavFilesInFolder (folder);
+        attachedFolderHeadline = folder.getFileName() + "/";
+        attachedFolderMeta = folder.getFullPathName();
+        analysisUploadStateMeta = juce::String (wavCount) + " wav files";
+    }
+    else
+    {
+        attachedFolderHeadline = "No WAV folder attached";
+        attachedFolderMeta = "Drop a folder here or choose one manually.";
+        analysisUploadStateMeta = "0 wav files";
+    }
+
     auto busy = audioProcessor.isRequestInFlight();
     planButton.setEnabled (! busy);
     chooseStemFolderButton.setEnabled (! busy);
     analyzeStemsButton.setEnabled (audioProcessor.canStartAnalysisUpload());
-
     planButton.setButtonText (busy ? "Working..." : "Send");
+
+    repaint();
+}
+
+bool ControllerView::isInterestedInFileDrag (const juce::StringArray& files)
+{
+    return resolveDroppedStemFolder (files).isDirectory();
+}
+
+void ControllerView::fileDragEnter (const juce::StringArray& files, int x, int y)
+{
+    fileDragMove (files, x, y);
+}
+
+void ControllerView::fileDragMove (const juce::StringArray& files, int x, int y)
+{
+    juce::ignoreUnused (files);
+    auto shouldHighlight = chatUploadBounds.contains (x, y);
+
+    if (dragOverUploadZone != shouldHighlight)
+    {
+        dragOverUploadZone = shouldHighlight;
+        repaint (chatUploadBounds.expanded (4));
+    }
+}
+
+void ControllerView::fileDragExit (const juce::StringArray& files)
+{
+    juce::ignoreUnused (files);
+
+    if (dragOverUploadZone)
+    {
+        dragOverUploadZone = false;
+        repaint (chatUploadBounds.expanded (4));
+    }
+}
+
+void ControllerView::filesDropped (const juce::StringArray& files, int x, int y)
+{
+    auto folder = resolveDroppedStemFolder (files);
+    auto dropInZone = chatUploadBounds.contains (x, y);
+    dragOverUploadZone = false;
+
+    if (dropInZone && folder.isDirectory())
+    {
+        audioProcessor.setStemFolder (folder);
+        refreshState();
+    }
+
+    repaint (chatUploadBounds.expanded (4));
 }
 
 void ControllerView::buttonClicked (juce::Button* button)
@@ -345,6 +484,36 @@ bool ControllerView::isWaitingState (const juce::String& analysisStatus) const
         return false;
 
     return true;
+}
+
+juce::File ControllerView::resolveDroppedStemFolder (const juce::StringArray& files) const
+{
+    for (const auto& path : files)
+    {
+        auto file = juce::File (path);
+
+        if (file.isDirectory())
+            return file;
+
+        if (file.existsAsFile() && file.hasFileExtension ("wav;WAV"))
+            return file.getParentDirectory();
+    }
+
+    return {};
+}
+
+int ControllerView::countWavFilesInFolder (const juce::File& folder)
+{
+    if (! folder.isDirectory())
+        return 0;
+
+    int count = 0;
+    for (const auto& entry : juce::RangedDirectoryIterator (folder, false, "*.wav", juce::File::findFiles))
+        juce::ignoreUnused (entry), ++count;
+    for (const auto& entry : juce::RangedDirectoryIterator (folder, false, "*.WAV", juce::File::findFiles))
+        juce::ignoreUnused (entry), ++count;
+
+    return count;
 }
 
 void ControllerView::sendCurrentPrompt()

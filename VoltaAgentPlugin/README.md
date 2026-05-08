@@ -1,5 +1,8 @@
 # VoltaAgentPlugin
 
+- 사용 가이드: [README_USAGE.md](/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/README_USAGE.md)
+- Trim MVP 설계: [TRIM_MVP.md](/Users/simjuheun/Developer/JUCE_prac/VoltaAgentPlugin/TRIM_MVP.md)
+
 `VoltaAgentPlugin`은 JUCE 기반 클라이언트로, DAW 내부 또는 독립 실행형 앱에서 동작하는 **AI Mixing Assistant UI**를 목표로 한다. 이 프로젝트의 역할은 단순 오디오 이펙터가 아니라, 사용자와 서버 사이를 연결하는 **채팅 + 분석 상태 + 액션 실행 패널**을 제공하는 것이다.
 
 

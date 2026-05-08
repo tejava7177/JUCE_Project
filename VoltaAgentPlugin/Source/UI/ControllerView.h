@@ -5,6 +5,7 @@
 class VoltaAgentPluginAudioProcessor;
 
 class ControllerView : public juce::Component,
+                       public juce::FileDragAndDropTarget,
                        private juce::Button::Listener,
                        private juce::TextEditor::Listener
 {
@@ -15,6 +16,11 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
     void refreshState();
+    bool isInterestedInFileDrag (const juce::StringArray& files) override;
+    void fileDragEnter (const juce::StringArray& files, int x, int y) override;
+    void fileDragMove (const juce::StringArray& files, int x, int y) override;
+    void fileDragExit (const juce::StringArray& files) override;
+    void filesDropped (const juce::StringArray& files, int x, int y) override;
 
     std::function<void()> onChooseStemFolder;
 
@@ -29,9 +35,16 @@ private:
                                      const juce::String& sessionStatus,
                                      const juce::String& analysisStatus) const;
     bool isWaitingState (const juce::String& analysisStatus) const;
+    juce::File resolveDroppedStemFolder (const juce::StringArray& files) const;
+    static int countWavFilesInFolder (const juce::File& folder);
     void sendCurrentPrompt();
 
     VoltaAgentPluginAudioProcessor& audioProcessor;
+    juce::Rectangle<int> chatUploadBounds;
+    bool dragOverUploadZone = false;
+    juce::String attachedFolderHeadline { "No WAV folder attached" };
+    juce::String attachedFolderMeta { "Drop a folder here or choose one manually." };
+    juce::String analysisUploadStateMeta { "0 wav files" };
 
     juce::Label progressTitle;
     juce::Label progressValue;
@@ -47,6 +60,7 @@ private:
     juce::Label composerTitle;
     juce::TextEditor promptEditor;
     juce::TextButton planButton { "Send" };
+    juce::Label chatTitle;
 
     juce::Label plannedChangesTitle;
     juce::TextEditor plannedChangesValue;

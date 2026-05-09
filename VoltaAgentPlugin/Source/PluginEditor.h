@@ -18,8 +18,10 @@ public:
 private:
     void timerCallback() override;
     void refreshLayoutAndState();
+    void pinWindowIfPossible();
 
     VoltaAgentPluginAudioProcessor& audioProcessor;
+    bool windowPinAttempted = false;
 
     juce::Label titleLabel;
     juce::Label statusTitleLabel;

@@ -23,6 +23,7 @@ public:
     void filesDropped (const juce::StringArray& files, int x, int y) override;
 
     std::function<void()> onChooseStemFolder;
+    std::function<void()> onRefreshSession;
 
 private:
     void buttonClicked (juce::Button* button) override;
@@ -34,6 +35,15 @@ private:
     juce::String buildAssistantText (const juce::String& explanation,
                                      const juce::String& sessionStatus,
                                      const juce::String& analysisStatus) const;
+    juce::String buildWorkflowGuide (const juce::String& sessionStatus,
+                                     const juce::String& analysisStatus,
+                                     bool hasStemFolder) const;
+    juce::String buildNextActionText (const juce::String& sessionStatus,
+                                      const juce::String& analysisStatus,
+                                      bool hasStemFolder) const;
+    juce::String buildChatGuideText (const juce::String& analysisStatus) const;
+    bool isSessionReady (const juce::String& sessionStatus) const;
+    bool isAnalysisComplete (const juce::String& analysisStatus) const;
     bool isWaitingState (const juce::String& analysisStatus) const;
     juce::File resolveDroppedStemFolder (const juce::StringArray& files) const;
     static int countWavFilesInFolder (const juce::File& folder);
@@ -50,6 +60,7 @@ private:
     juce::Label progressValue;
     juce::Label stemFolderTitle;
     juce::Label stemFolderValue;
+    juce::TextButton refreshSessionButton { "Ableton 정보 불러오기" };
     juce::TextButton chooseStemFolderButton { "Choose Stem Folder" };
     juce::TextButton analyzeStemsButton { "Analyze WAV Stems" };
 

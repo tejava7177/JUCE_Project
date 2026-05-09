@@ -53,6 +53,12 @@ VoltaAgentPluginAudioProcessorEditor::VoltaAgentPluginAudioProcessorEditor (Volt
         });
     };
 
+    controllerView.onRefreshSession = [this]
+    {
+        audioProcessor.refreshSession();
+        refreshLayoutAndState();
+    };
+
     startTimerHz (8);
     refreshLayoutAndState();
 }
@@ -106,8 +112,23 @@ void VoltaAgentPluginAudioProcessorEditor::timerCallback()
 
 void VoltaAgentPluginAudioProcessorEditor::refreshLayoutAndState()
 {
+    pinWindowIfPossible();
     statusValueLabel.setText (audioProcessor.getServerStatusText(), juce::dontSendNotification);
     controllerView.refreshState();
     debugPanel.refreshState();
     resized();
+}
+
+void VoltaAgentPluginAudioProcessorEditor::pinWindowIfPossible()
+{
+    if (windowPinAttempted)
+        return;
+
+    if (auto* peer = getPeer())
+    {
+        juce::ignoreUnused (peer);
+        setAlwaysOnTop (true);
+        toFront (false);
+        windowPinAttempted = true;
+    }
 }

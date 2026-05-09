@@ -29,14 +29,14 @@ private:
     VoltaAgentPluginAudioProcessor& audioProcessor;
     bool expanded = false;
 
-    juce::TextButton expandButton { "Advanced Debug" };
+    juce::TextButton expandButton { "Debug" };
     juce::Label endpointLabel;
     juce::TextEditor endpointEditor;
     juce::Label serverLabel;
     juce::Label sessionLabel;
     juce::Label projectLabel;
     juce::Label projectValueLabel;
-    juce::TextButton refreshSessionButton { "Refresh Session" };
+    juce::TextButton refreshSessionButton { "Refresh" };
     juce::Label tracksLabel;
     juce::TextEditor tracksEditor;
     juce::Label explanationLabel;

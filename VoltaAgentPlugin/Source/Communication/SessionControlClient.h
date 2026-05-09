@@ -16,7 +16,8 @@ enum class SessionRequestType
     createProject,
     uploadProjectTrack,
     fetchProjectAnalysis,
-    projectChat
+    projectChat,
+    requestSessionScan
 };
 
 struct SessionTrackInfo
@@ -186,6 +187,16 @@ public:
                         juce::JSON::toString (juce::var (requestObject.release())));
     }
 
+    void requestSessionScan (juce::String endpointUrl, juce::String source, juce::String reason)
+    {
+        auto requestObject = std::make_unique<juce::DynamicObject>();
+        requestObject->setProperty ("source", source);
+        requestObject->setProperty ("reason", reason);
+        enqueueRequest (SessionRequestType::requestSessionScan,
+                        std::move (endpointUrl),
+                        juce::JSON::toString (juce::var (requestObject.release())));
+    }
+
     void stop()
     {
         signalThreadShouldExit();
@@ -234,6 +245,9 @@ private:
 
             case SessionRequestType::projectChat:
                 return 120000;
+
+            case SessionRequestType::requestSessionScan:
+                return 5000;
         }
 
         return 4000;
@@ -267,6 +281,9 @@ private:
 
             case SessionRequestType::projectChat:
                 return "Chat request timed out";
+
+            case SessionRequestType::requestSessionScan:
+                return "Session scan request timed out";
         }
 
         return "Server offline";
@@ -800,6 +817,44 @@ private:
         return response;
     }
 
+    static SessionControlResponse parseRequestSessionScanResponse (int statusCode, const juce::String& responseText)
+    {
+        SessionControlResponse response;
+        response.type = SessionRequestType::requestSessionScan;
+        response.statusCode = statusCode;
+        response.rawResponse = responseText;
+
+        auto parsed = juce::JSON::parse (responseText);
+        auto* object = parsed.getDynamicObject();
+
+        if (object != nullptr)
+        {
+            response.parseSucceeded = true;
+            response.errorMessage = getErrorMessageFromObject (object);
+            response.status = object->getProperty ("status").toString();
+            response.explanation = object->getProperty ("message").toString();
+        }
+        else
+        {
+            response.errorMessage = "Invalid response from server";
+        }
+
+        if (statusCode >= 200 && statusCode < 300)
+        {
+            response.succeeded = true;
+
+            if (response.explanation.isEmpty())
+                response.explanation = response.status.isNotEmpty() ? response.status : "Session scan requested";
+
+            return response;
+        }
+
+        if (response.errorMessage.isEmpty())
+            response.errorMessage = "Failed to request session scan";
+
+        return response;
+    }
+
     static SessionControlResponse parseResponse (SessionRequestType type, int statusCode, const juce::String& responseText)
     {
         switch (type)
@@ -815,6 +870,7 @@ private:
             case SessionRequestType::uploadProjectTrack:    return parseUploadProjectTrackResponse (statusCode, responseText);
             case SessionRequestType::fetchProjectAnalysis:  return parseFetchProjectAnalysisResponse (statusCode, responseText);
             case SessionRequestType::projectChat:           return parseProjectChatResponse (statusCode, responseText);
+            case SessionRequestType::requestSessionScan:    return parseRequestSessionScanResponse (statusCode, responseText);
         }
 
         return {};

@@ -31,12 +31,18 @@ VoltaAgentPluginAudioProcessor::VoltaAgentPluginAudioProcessor()
         handleSessionControlResponse (response);
     });
 
+    sessionScanClient.setResultHandler ([this] (const volta::SessionControlResponse& response)
+    {
+        handleSessionScanResponse (response);
+    });
+
     requestServerHealth();
 }
 
 VoltaAgentPluginAudioProcessor::~VoltaAgentPluginAudioProcessor()
 {
     sessionControlClient.stop();
+    sessionScanClient.stop();
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout VoltaAgentPluginAudioProcessor::createParameterLayout()
@@ -447,6 +453,8 @@ void VoltaAgentPluginAudioProcessor::startAnalysisUpload()
 
     endpoint = buildSessionEndpoint (getServerEndpointText(), "/projects");
 
+    requestSessionScan();
+
     {
         const juce::ScopedLock scopedLock (statusLock);
         analysisUploadState.pendingFiles = discoveredFiles;
@@ -471,6 +479,18 @@ void VoltaAgentPluginAudioProcessor::startAnalysisUpload()
 
     requestInFlight.store (true);
     sessionControlClient.requestCreateProject (endpoint);
+}
+
+void VoltaAgentPluginAudioProcessor::requestSessionScan()
+{
+    auto endpoint = buildSessionEndpoint (getServerEndpointText(), "/request-session-scan");
+
+    {
+        const juce::ScopedLock scopedLock (statusLock);
+        appendActivityLog ("session-scan request start | POST " + endpoint + " | source=juce_analyze_wav_stems");
+    }
+
+    sessionScanClient.requestSessionScan (endpoint, "juce_analyze_wav_stems", "analyze_wav_stems");
 }
 
 juce::String VoltaAgentPluginAudioProcessor::buildServerBaseUrl (const juce::String& serverEndpoint)
@@ -1017,6 +1037,11 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
 
                 break;
             }
+
+            case volta::SessionRequestType::requestSessionScan:
+            {
+                break;
+            }
         }
     }
 
@@ -1034,6 +1059,28 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
 
     if (shouldRefreshHealth)
         requestServerHealth();
+}
+
+void VoltaAgentPluginAudioProcessor::handleSessionScanResponse (const volta::SessionControlResponse& response)
+{
+    const juce::ScopedLock scopedLock (statusLock);
+
+    auto parseSuccess = formatBool (response.parseSucceeded);
+    auto rawResponse = sanitizeResponseForLog (response.rawResponse);
+
+    if (response.succeeded)
+    {
+        appendActivityLog ("session-scan request end | http " + juce::String (response.statusCode)
+                           + " | parse=" + parseSuccess
+                           + " | status=" + (response.status.isNotEmpty() ? response.status : "requested")
+                           + " | raw=" + rawResponse);
+        return;
+    }
+
+    appendActivityLog ("session-scan request end | http " + juce::String (response.statusCode)
+                       + " | parse=" + parseSuccess
+                       + " | error=" + (response.errorMessage.isNotEmpty() ? response.errorMessage : "request failed")
+                       + " | raw=" + rawResponse);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

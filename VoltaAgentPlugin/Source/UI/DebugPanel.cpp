@@ -3,6 +3,11 @@
 
 namespace
 {
+juce::String debugKorean (const char* escapedUnicode)
+{
+    return juce::String::fromUTF8 (juce::CharPointer_UTF8 (escapedUnicode));
+}
+
 void configureDebugReadOnlyArea (juce::TextEditor& editor)
 {
     editor.setMultiLine (true);
@@ -25,15 +30,17 @@ DebugPanel::DebugPanel (VoltaAgentPluginAudioProcessor& processor)
 {
     addAndMakeVisible (expandButton);
     expandButton.addListener (this);
+    expandButton.setButtonText (debugKorean ("\xEA\xB3\xA0\xEA\xB8\x89 \xEB\x94\x94\xEB\xB2\x84\xEA\xB7\xB8"));
+    refreshSessionButton.setButtonText (debugKorean ("\xEC\x97\x90\xEC\x9D\xB4\xEB\xB8\x94\xED\x86\xA4 \xEC\xA0\x95\xEB\xB3\xB4 \xEB\xB6\x88\xEB\x9F\xAC\xEC\x98\xA4\xEA\xB8\xB0"));
 
-    endpointLabel.setText ("Server URL", juce::dontSendNotification);
+    endpointLabel.setText (debugKorean ("\xEC\x84\x9C\xEB\xB2\x84 \xEC\xA3\xBC\xEC\x86\x8C"), juce::dontSendNotification);
     endpointEditor.addListener (this);
 
-    configureSectionLabel (serverLabel, "Server / Session");
-    configureSectionLabel (projectLabel, "Project Session");
-    configureSectionLabel (tracksLabel, "Tracks");
-    configureSectionLabel (explanationLabel, "Latest Explanation / Preview");
-    configureSectionLabel (activityLabel, "Activity Log");
+    configureSectionLabel (serverLabel, debugKorean ("\xEC\x84\x9C\xEB\xB2\x84 / \xEC\x84\xB8\xEC\x85\x98"));
+    configureSectionLabel (projectLabel, debugKorean ("\xED\x94\x84\xEB\xA1\x9C\xEC\xA0\x9D\xED\x8A\xB8 \xEC\x84\xB8\xEC\x85\x98"));
+    configureSectionLabel (tracksLabel, debugKorean ("\xED\x8A\xB8\xEB\x9E\x99 \xEC\xA0\x95\xEB\xB3\xB4"));
+    configureSectionLabel (explanationLabel, debugKorean ("\xEC\xB5\x9C\xEA\xB7\xBC \xEC\x84\xA4\xEB\xAA\x85 / \xEB\xAF\xB8\xEB\xA6\xAC\xEB\xB3\xB4\xEA\xB8\xB0"));
+    configureSectionLabel (activityLabel, debugKorean ("\xED\x99\x9C\xEB\x8F\x99 \xEB\xA1\x9C\xEA\xB7\xB8"));
 
     configureDebugReadOnlyArea (tracksEditor);
     configureDebugReadOnlyArea (explanationEditor);
@@ -127,17 +134,17 @@ void DebugPanel::resized()
 void DebugPanel::refreshState()
 {
     endpointEditor.setText (audioProcessor.getServerEndpointText(), juce::dontSendNotification);
-    sessionLabel.setText ("Server: " + audioProcessor.getServerStatusText()
-                              + " | Session: " + audioProcessor.getSessionStatusText(),
+    sessionLabel.setText (debugKorean ("\xEC\x84\x9C\xEB\xB2\x84: ") + audioProcessor.getServerStatusText()
+                              + " | " + debugKorean ("\xEC\x84\xB8\xEC\x85\x98: ") + audioProcessor.getSessionStatusText(),
                           juce::dontSendNotification);
-    projectValueLabel.setText ("Project: " + audioProcessor.getProjectSessionText()
-                                   + " | Stem folder: "
-                                   + (audioProcessor.getStemFolderText().isNotEmpty() ? audioProcessor.getStemFolderText() : "Not selected")
-                                   + " | Analysis: " + audioProcessor.getAnalysisStatusText(),
+    projectValueLabel.setText (debugKorean ("\xED\x94\x84\xEB\xA1\x9C\xEC\xA0\x9D\xED\x8A\xB8: ") + audioProcessor.getProjectSessionText()
+                                   + " | " + debugKorean ("WAV \xED\x8F\xB4\xEB\x8D\x94: ")
+                                   + (audioProcessor.getStemFolderText().isNotEmpty() ? audioProcessor.getStemFolderText() : debugKorean ("\xEC\x84\xA0\xED\x83\x9D \xEC\x95\x88 \xEB\x90\xA8"))
+                                   + " | " + debugKorean ("\xEB\xB6\x84\xEC\x84\x9D: ") + audioProcessor.getAnalysisStatusText(),
                                juce::dontSendNotification);
     tracksEditor.setText (audioProcessor.getTrackListText(), juce::dontSendNotification);
-    explanationEditor.setText ("Explanation:\n" + audioProcessor.getExplanationText()
-                                   + "\n\nPreview:\n" + audioProcessor.getPlannedChangesText(),
+    explanationEditor.setText (debugKorean ("\xEC\x84\xA4\xEB\xAA\x85:\n") + audioProcessor.getExplanationText()
+                                   + debugKorean ("\n\n\xEB\xAF\xB8\xEB\xA6\xAC\xEB\xB3\xB4\xEA\xB8\xB0:\n") + audioProcessor.getPlannedChangesText(),
                                juce::dontSendNotification);
     activityEditor.setText (audioProcessor.getActivityLogText(), juce::dontSendNotification);
     refreshSessionButton.setEnabled (! audioProcessor.isRequestInFlight());
@@ -153,7 +160,9 @@ void DebugPanel::buttonClicked (juce::Button* button)
     if (button == &expandButton)
     {
         expanded = ! expanded;
-        expandButton.setButtonText (expanded ? "Hide Advanced Debug" : "Advanced Debug");
+        expandButton.setButtonText (expanded
+                                        ? debugKorean ("\xEA\xB3\xA0\xEA\xB8\x89 \xEB\x94\x94\xEB\xB2\x84\xEA\xB7\xB8 \xEC\x88\xA8\xEA\xB8\xB0\xEA\xB8\xB0")
+                                        : debugKorean ("\xEA\xB3\xA0\xEA\xB8\x89 \xEB\x94\x94\xEB\xB2\x84\xEA\xB7\xB8"));
         updateVisibility();
         if (onLayoutChange)
             onLayoutChange();

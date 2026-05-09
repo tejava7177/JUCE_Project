@@ -141,11 +141,14 @@ private:
     static juce::String formatBool (bool value);
     static juce::String getServerStateLabel (ServerState state, int pendingApplyCount);
     static juce::String getAnalysisStateLabel (const AnalysisUploadState& analysisState);
+    void requestSessionScan();
     void appendActivityLog (const juce::String& line);
     void uploadNextAnalysisFile();
     void handleSessionControlResponse (const volta::SessionControlResponse& response);
+    void handleSessionScanResponse (const volta::SessionControlResponse& response);
 
     volta::SessionControlClient sessionControlClient;
+    volta::SessionControlClient sessionScanClient;
     juce::CriticalSection statusLock;
     std::atomic<bool> requestInFlight { false };
     ServerState serverState { ServerState::offline };

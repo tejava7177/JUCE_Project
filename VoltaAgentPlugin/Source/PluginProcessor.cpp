@@ -290,6 +290,18 @@ juce::String VoltaAgentPluginAudioProcessor::getLastSubmittedPromptText() const
     return lastSubmittedPrompt;
 }
 
+bool VoltaAgentPluginAudioProcessor::isNamingApprovalPending() const
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    return projectSessionState.namingApprovalPending;
+}
+
+int VoltaAgentPluginAudioProcessor::getPendingNamingApprovalCount() const
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    return projectSessionState.pendingNamingApprovalCount;
+}
+
 bool VoltaAgentPluginAudioProcessor::canApplyPlan() const
 {
     const juce::ScopedLock scopedLock (statusLock);
@@ -479,6 +491,8 @@ void VoltaAgentPluginAudioProcessor::startAnalysisUpload()
         projectSessionState.projectSessionId.clear();
         projectSessionState.chatSessionId.clear();
         projectSessionState.analysisSessionId.clear();
+        projectSessionState.namingApprovalPending = false;
+        projectSessionState.pendingNamingApprovalCount = 0;
         projectSessionState.pendingAction = ProjectAction::createAndUploadStems;
         projectSessionState.pendingChatMessage.clear();
         lastSubmittedPrompt.clear();
@@ -526,6 +540,34 @@ void VoltaAgentPluginAudioProcessor::requestProjectOverview()
 
     requestInFlight.store (true);
     sessionControlClient.requestProjectOverview (endpoint, message);
+}
+
+void VoltaAgentPluginAudioProcessor::approvePendingNamingProposal()
+{
+    juce::String endpoint;
+
+    {
+        const juce::ScopedLock scopedLock (statusLock);
+
+        if (projectSessionState.projectSessionId.isEmpty() || ! projectSessionState.namingApprovalPending)
+            return;
+
+        endpoint = buildSessionEndpoint (getServerEndpointText(), "/projects/" + projectSessionState.projectSessionId + "/chat");
+        explanationText = "Submitting naming approval...";
+        appendActivityLog ("project chat request start | POST " + endpoint + " | prompt=네이밍과 그룹핑 승인");
+    }
+
+    requestInFlight.store (true);
+    sessionControlClient.requestProjectChat (endpoint, juce::String::fromUTF8 (u8"네이밍과 그룹핑 승인"));
+}
+
+void VoltaAgentPluginAudioProcessor::rejectPendingNamingProposal()
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    projectSessionState.namingApprovalPending = false;
+    projectSessionState.pendingNamingApprovalCount = 0;
+    explanationText = juce::String::fromUTF8 (u8"네이밍과 그루핑 제안을 보류했습니다. 다른 이름 규칙이나 수정 요청을 바로 입력할 수 있습니다.");
+    appendActivityLog ("naming approval dismissed locally");
 }
 
 juce::String VoltaAgentPluginAudioProcessor::buildServerBaseUrl (const juce::String& serverEndpoint)
@@ -1043,6 +1085,18 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
                 {
                     lastPlanOperations = response.operations;
                     explanationText = response.explanation.isNotEmpty() ? response.explanation : "Reply ready";
+
+                    if (response.namingApplyStatus == "awaiting_approval")
+                    {
+                        projectSessionState.namingApprovalPending = true;
+                        projectSessionState.pendingNamingApprovalCount = response.namingApplyCount;
+                    }
+                    else if (response.namingApplyStatus == "staged")
+                    {
+                        projectSessionState.namingApprovalPending = false;
+                        projectSessionState.pendingNamingApprovalCount = 0;
+                    }
+
                     if (! lastPlanOperations.isEmpty())
                     {
                         auto operationText = formatOperationsText (lastPlanOperations);
@@ -1063,6 +1117,7 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
                     appendActivityLog ("project chat request end | http " + juce::String (response.statusCode)
                                        + " | parse=" + parseSuccess
                                        + " | operations=" + juce::String (lastPlanOperations.size())
+                                       + " | naming_apply=" + response.namingApplyStatus
                                        + " | raw=" + rawResponse);
                 }
                 else

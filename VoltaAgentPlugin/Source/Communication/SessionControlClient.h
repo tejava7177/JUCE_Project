@@ -54,6 +54,7 @@ struct SessionControlResponse
     int applied = 0;
     int revision = 0;
     int uploadedTracks = 0;
+    int namingApplyCount = 0;
     juce::String status;
     juce::String explanation;
     juce::String errorMessage;
@@ -65,6 +66,8 @@ struct SessionControlResponse
     juce::Array<SessionOperation> operations;
     juce::String analysisSummary;
     juce::String overviewTitle;
+    juce::String namingApplyStatus;
+    juce::String namingApprovalMode;
 };
 
 class SessionControlClient : private juce::Thread
@@ -780,6 +783,17 @@ private:
         response.explanation = object->getProperty ("assistant").toString();
         response.status = object->getProperty ("current_step").toString();
 
+        if (auto namingApplyValue = object->getProperty ("naming_apply"); namingApplyValue.isObject())
+        {
+            if (auto* namingApplyObject = namingApplyValue.getDynamicObject())
+            {
+                response.namingApplyStatus = namingApplyObject->getProperty ("status").toString();
+                response.namingApplyCount = static_cast<int> (namingApplyObject->getProperty ("count"));
+                response.revision = static_cast<int> (namingApplyObject->getProperty ("revision"));
+                response.namingApprovalMode = namingApplyObject->getProperty ("approval_mode").toString();
+            }
+        }
+
         if (auto operationsValue = object->getProperty ("operations"); operationsValue.isArray())
         {
             if (auto* operationsArray = operationsValue.getArray())
@@ -809,6 +823,15 @@ private:
 
         if (response.analysisSummary.isEmpty())
             response.analysisSummary = object->getProperty ("analysis_summary").toString();
+
+        if (response.analysisSummary.isEmpty())
+        {
+            if (auto trackNamingValue = object->getProperty ("track_naming"); trackNamingValue.isObject())
+            {
+                if (auto* trackNamingObject = trackNamingValue.getDynamicObject())
+                    response.analysisSummary = trackNamingObject->getProperty ("summary").toString();
+            }
+        }
 
         if (statusCode >= 200 && statusCode < 300)
         {

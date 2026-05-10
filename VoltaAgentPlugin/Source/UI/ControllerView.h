@@ -47,6 +47,7 @@ private:
                                       const juce::String& analysisStatus,
                                       bool hasStemFolder) const;
     juce::String buildChatGuideText (const juce::String& analysisStatus) const;
+    juce::String buildNamingApprovalGuideText (int pendingCount) const;
     bool isSessionReady (const juce::String& sessionStatus) const;
     bool isAnalysisComplete (const juce::String& analysisStatus) const;
     bool isWaitingState (const juce::String& analysisStatus) const;
@@ -68,6 +69,8 @@ private:
     juce::TextButton refreshSessionButton { "Ableton 정보 불러오기" };
     juce::TextButton chooseStemFolderButton { "Choose Stem Folder" };
     juce::TextButton analyzeStemsButton { "Analyze WAV Stems" };
+    juce::TextButton approveNamingButton { "승인" };
+    juce::TextButton rejectNamingButton { "거절" };
 
     juce::Label assistantTitle;
     juce::TextEditor assistantBubble;

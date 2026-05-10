@@ -89,6 +89,8 @@ public:
     juce::String getAnalysisStatusText() const;
     juce::String getProjectSessionText() const;
     juce::String getLastSubmittedPromptText() const;
+    bool isNamingApprovalPending() const;
+    int getPendingNamingApprovalCount() const;
     bool canApplyPlan() const;
     bool isRequestInFlight() const;
     bool canStartAnalysisUpload() const;
@@ -99,6 +101,8 @@ public:
     void planActions();
     void applyPlannedActions();
     void startAnalysisUpload();
+    void approvePendingNamingProposal();
+    void rejectPendingNamingProposal();
 
 private:
     struct SessionSummaryState
@@ -129,6 +133,8 @@ private:
         juce::String currentStep;
         juce::String genre;
         juce::String pendingChatMessage;
+        bool namingApprovalPending = false;
+        int pendingNamingApprovalCount = 0;
         ProjectAction pendingAction = ProjectAction::none;
     };
 

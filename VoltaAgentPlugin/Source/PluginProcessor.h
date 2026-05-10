@@ -83,6 +83,7 @@ public:
     juce::String getExplanationText() const;
     juce::String getTrackListText() const;
     juce::String getPlannedChangesText() const;
+    juce::String getProjectOverviewText() const;
     juce::String getActivityLogText() const;
     juce::String getStemFolderText() const;
     juce::String getAnalysisStatusText() const;
@@ -142,6 +143,7 @@ private:
     static juce::String getServerStateLabel (ServerState state, int pendingApplyCount);
     static juce::String getAnalysisStateLabel (const AnalysisUploadState& analysisState);
     void requestSessionScan();
+    void requestProjectOverview();
     void appendActivityLog (const juce::String& line);
     void uploadNextAnalysisFile();
     void handleSessionControlResponse (const volta::SessionControlResponse& response);
@@ -160,6 +162,7 @@ private:
     juce::String explanationText { "Connecting to server..." };
     juce::String trackListText { "No session loaded." };
     juce::String plannedChangesText { "No planned changes yet." };
+    juce::String projectOverviewText;
     juce::String activityLogText { "Connecting to server..." };
     SessionSummaryState sessionSummary;
     AnalysisUploadState analysisUploadState;

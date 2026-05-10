@@ -17,6 +17,7 @@ enum class SessionRequestType
     uploadProjectTrack,
     fetchProjectAnalysis,
     projectChat,
+    projectOverview,
     requestSessionScan
 };
 
@@ -63,6 +64,7 @@ struct SessionControlResponse
     juce::Array<SessionTrackInfo> tracks;
     juce::Array<SessionOperation> operations;
     juce::String analysisSummary;
+    juce::String overviewTitle;
 };
 
 class SessionControlClient : private juce::Thread
@@ -187,6 +189,15 @@ public:
                         juce::JSON::toString (juce::var (requestObject.release())));
     }
 
+    void requestProjectOverview (juce::String endpointUrl, juce::String message)
+    {
+        auto requestObject = std::make_unique<juce::DynamicObject>();
+        requestObject->setProperty ("message", message);
+        enqueueRequest (SessionRequestType::projectOverview,
+                        std::move (endpointUrl),
+                        juce::JSON::toString (juce::var (requestObject.release())));
+    }
+
     void requestSessionScan (juce::String endpointUrl, juce::String source, juce::String reason)
     {
         auto requestObject = std::make_unique<juce::DynamicObject>();
@@ -246,6 +257,9 @@ private:
             case SessionRequestType::projectChat:
                 return 120000;
 
+            case SessionRequestType::projectOverview:
+                return 120000;
+
             case SessionRequestType::requestSessionScan:
                 return 5000;
         }
@@ -281,6 +295,9 @@ private:
 
             case SessionRequestType::projectChat:
                 return "Chat request timed out";
+
+            case SessionRequestType::projectOverview:
+                return "Project overview request timed out";
 
             case SessionRequestType::requestSessionScan:
                 return "Session scan request timed out";
@@ -787,25 +804,11 @@ private:
             }
         }
 
-        if (auto toolsValue = object->getProperty ("tool_calls"); toolsValue.isArray())
-        {
-            if (auto* toolsArray = toolsValue.getArray())
-            {
-                juce::StringArray toolLines;
-                for (const auto& entry : *toolsArray)
-                {
-                    if (auto* toolObject = entry.getDynamicObject())
-                    {
-                        auto name = toolObject->getProperty ("name").toString();
-                        toolLines.add (name.isNotEmpty() ? name : "tool_call");
-                    }
-                }
-                response.analysisSummary = toolLines.joinIntoString ("\n");
-            }
-        }
-
         if (response.analysisSummary.isEmpty())
             response.analysisSummary = object->getProperty ("operation_summary").toString();
+
+        if (response.analysisSummary.isEmpty())
+            response.analysisSummary = object->getProperty ("analysis_summary").toString();
 
         if (statusCode >= 200 && statusCode < 300)
         {
@@ -814,6 +817,152 @@ private:
         }
 
         response.errorMessage = "Project chat failed";
+        return response;
+    }
+
+    static SessionControlResponse parseProjectOverviewResponse (int statusCode, const juce::String& responseText)
+    {
+        SessionControlResponse response;
+        response.type = SessionRequestType::projectOverview;
+        response.statusCode = statusCode;
+        response.rawResponse = responseText;
+
+        auto parsed = juce::JSON::parse (responseText);
+        auto* object = parsed.getDynamicObject();
+
+        if (object == nullptr)
+        {
+            response.errorMessage = "Invalid response from server";
+            return response;
+        }
+
+        response.parseSucceeded = true;
+        response.errorMessage = getErrorMessageFromObject (object);
+
+        auto overviewValue = object->getProperty ("overview");
+        auto* overviewObject = overviewValue.getDynamicObject();
+        if (overviewObject == nullptr)
+        {
+            response.errorMessage = "Missing overview object";
+            return response;
+        }
+
+        response.overviewTitle = overviewObject->getProperty ("overview_title").toString();
+        response.explanation = overviewObject->getProperty ("one_liner").toString();
+
+        juce::StringArray lines;
+        if (response.overviewTitle.isNotEmpty())
+            lines.add (response.overviewTitle);
+
+        if (auto genreValue = overviewObject->getProperty ("genre_estimate"); genreValue.isObject())
+        {
+            if (auto* genreObject = genreValue.getDynamicObject())
+            {
+                auto label = genreObject->getProperty ("label").toString();
+                auto reason = genreObject->getProperty ("reason").toString();
+                auto confidence = static_cast<double> (genreObject->getProperty ("confidence"));
+                if (label.isNotEmpty())
+                    lines.add ("Genre estimate: " + label + " (" + juce::String (confidence, 2) + ")");
+                if (reason.isNotEmpty())
+                    lines.add ("Reason: " + reason);
+            }
+        }
+
+        if (auto moodValue = overviewObject->getProperty ("mood_estimate"); moodValue.isArray())
+        {
+            if (auto* moods = moodValue.getArray(); moods != nullptr && ! moods->isEmpty())
+            {
+                juce::StringArray moodLines;
+                for (const auto& mood : *moods)
+                    moodLines.add (mood.toString());
+                lines.add ("Mood: " + moodLines.joinIntoString (", "));
+            }
+        }
+
+        if (auto styleValue = overviewObject->getProperty ("style_hint"); styleValue.isObject())
+        {
+            if (auto* styleObject = styleValue.getDynamicObject())
+            {
+                auto label = styleObject->getProperty ("label").toString();
+                auto confidence = static_cast<double> (styleObject->getProperty ("confidence"));
+                if (label.isNotEmpty())
+                    lines.add ("Style hint: " + label + " (" + juce::String (confidence, 2) + ")");
+            }
+        }
+
+        if (auto identityValue = overviewObject->getProperty ("project_identity"); identityValue.isObject())
+        {
+            if (auto* identityObject = identityValue.getDynamicObject())
+            {
+                if (auto instrumentsValue = identityObject->getProperty ("core_instruments"); instrumentsValue.isArray())
+                {
+                    if (auto* instruments = instrumentsValue.getArray(); instruments != nullptr && ! instruments->isEmpty())
+                    {
+                        juce::StringArray names;
+                        for (const auto& item : *instruments)
+                            names.add (item.toString());
+                        lines.add ("Core instruments: " + names.joinIntoString (", "));
+                    }
+                }
+
+                auto vocalPresence = identityObject->getProperty ("vocal_presence").toString();
+                if (vocalPresence.isNotEmpty())
+                    lines.add ("Vocal presence: " + vocalPresence);
+
+                auto referenceTrackPresent = static_cast<bool> (identityObject->getProperty ("reference_track_present"));
+                auto fxTrackPresent = static_cast<bool> (identityObject->getProperty ("fx_track_present"));
+                lines.add ("Reference track present: " + juce::String (referenceTrackPresent ? "yes" : "no"));
+                lines.add ("FX track present: " + juce::String (fxTrackPresent ? "yes" : "no"));
+            }
+        }
+
+        if (auto workflowValue = overviewObject->getProperty ("recommended_workflow"); workflowValue.isArray())
+        {
+            if (auto* workflow = workflowValue.getArray(); workflow != nullptr && ! workflow->isEmpty())
+            {
+                lines.add ({});
+                lines.add ("Recommended workflow:");
+                for (const auto& item : *workflow)
+                    lines.add ("- " + item.toString());
+            }
+        }
+
+        if (auto findingsValue = overviewObject->getProperty ("notable_findings"); findingsValue.isArray())
+        {
+            if (auto* findings = findingsValue.getArray(); findings != nullptr && ! findings->isEmpty())
+            {
+                lines.add ({});
+                lines.add ("Notable findings:");
+                for (const auto& item : *findings)
+                    lines.add ("- " + item.toString());
+            }
+        }
+
+        if (auto goalValue = overviewObject->getProperty ("user_goal_guess"); goalValue.isObject())
+        {
+            if (auto* goalObject = goalValue.getDynamicObject())
+            {
+                auto label = goalObject->getProperty ("label").toString();
+                auto confidence = static_cast<double> (goalObject->getProperty ("confidence"));
+                if (label.isNotEmpty())
+                {
+                    lines.add ({});
+                    lines.add ("User goal guess: " + label + " (" + juce::String (confidence, 2) + ")");
+                }
+            }
+        }
+
+        response.analysisSummary = lines.joinIntoString ("\n");
+
+        if (statusCode >= 200 && statusCode < 300)
+        {
+            response.succeeded = true;
+            return response;
+        }
+
+        if (response.errorMessage.isEmpty())
+            response.errorMessage = "Project overview failed";
+
         return response;
     }
 
@@ -870,6 +1019,7 @@ private:
             case SessionRequestType::uploadProjectTrack:    return parseUploadProjectTrackResponse (statusCode, responseText);
             case SessionRequestType::fetchProjectAnalysis:  return parseFetchProjectAnalysisResponse (statusCode, responseText);
             case SessionRequestType::projectChat:           return parseProjectChatResponse (statusCode, responseText);
+            case SessionRequestType::projectOverview:       return parseProjectOverviewResponse (statusCode, responseText);
             case SessionRequestType::requestSessionScan:    return parseRequestSessionScanResponse (statusCode, responseText);
         }
 

@@ -5,6 +5,11 @@ namespace
 {
 constexpr auto serverEndpointProperty = "serverEndpoint";
 constexpr auto stemFolderProperty = "stemFolder";
+
+juce::String initialProjectBriefPrompt()
+{
+    return juce::String::fromUTF8 (u8"프로젝트에 대해 간단히 설명해주세요. 장르, 보컬 유무, 주요 악기, 원하는 작업이 있으면 같이 알려주세요.");
+}
 }
 
 VoltaAgentPluginAudioProcessor::VoltaAgentPluginAudioProcessor()
@@ -235,6 +240,12 @@ juce::String VoltaAgentPluginAudioProcessor::getPlannedChangesText() const
 {
     const juce::ScopedLock scopedLock (statusLock);
     return plannedChangesText;
+}
+
+juce::String VoltaAgentPluginAudioProcessor::getProjectOverviewText() const
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    return projectOverviewText;
 }
 
 juce::String VoltaAgentPluginAudioProcessor::getActivityLogText() const
@@ -470,6 +481,8 @@ void VoltaAgentPluginAudioProcessor::startAnalysisUpload()
         projectSessionState.analysisSessionId.clear();
         projectSessionState.pendingAction = ProjectAction::createAndUploadStems;
         projectSessionState.pendingChatMessage.clear();
+        lastSubmittedPrompt.clear();
+        projectOverviewText.clear();
         explanationText = "Creating analysis session...";
         plannedChangesText = "Preparing to upload " + juce::String (discoveredFiles.size()) + " WAV stem(s).";
         appendActivityLog ("project session request start | POST " + endpoint
@@ -491,6 +504,28 @@ void VoltaAgentPluginAudioProcessor::requestSessionScan()
     }
 
     sessionScanClient.requestSessionScan (endpoint, "juce_analyze_wav_stems", "analyze_wav_stems");
+}
+
+void VoltaAgentPluginAudioProcessor::requestProjectOverview()
+{
+    juce::String endpoint;
+    juce::String message;
+
+    {
+        const juce::ScopedLock scopedLock (statusLock);
+        if (projectSessionState.projectSessionId.isEmpty())
+            return;
+
+        endpoint = buildSessionEndpoint (getServerEndpointText(), "/projects/" + projectSessionState.projectSessionId + "/overview");
+        message = lastSubmittedPrompt.isNotEmpty()
+                    ? lastSubmittedPrompt
+                    : juce::String::fromUTF8 (u8"이 프로젝트를 분석해서 장르, 분위기, 구성, 추천 믹싱 순서를 정리해줘");
+        appendActivityLog ("project overview request start | POST " + endpoint);
+        explanationText = "Generating project overview...";
+    }
+
+    requestInFlight.store (true);
+    sessionControlClient.requestProjectOverview (endpoint, message);
 }
 
 juce::String VoltaAgentPluginAudioProcessor::buildServerBaseUrl (const juce::String& serverEndpoint)
@@ -886,7 +921,7 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
                 {
                     analysisUploadState.state = AnalysisState::completed;
                     analysisUploadState.analysisSummaryText = response.analysisSummary;
-                    explanationText = "Analysis completed for " + juce::String (response.trackCount) + " stem(s)";
+                    explanationText = initialProjectBriefPrompt();
                     plannedChangesText = response.analysisSummary + "\n\n" + formatAnalysisTrackListText (response.tracks);
                     appendActivityLog ("analysis result request end | http " + juce::String (response.statusCode)
                                        + " | parse=" + parseSuccess
@@ -979,12 +1014,15 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
                 {
                     analysisUploadState.state = AnalysisState::completed;
                     analysisUploadState.analysisSummaryText = "Project analysis complete";
-                    explanationText = "Analysis completed for " + juce::String (response.trackCount) + " stem(s)";
+                    explanationText = "Generating project overview...";
                     plannedChangesText = formatAnalysisTrackListText (response.tracks);
+                    projectOverviewText.clear();
                     appendActivityLog ("project analysis request end | http " + juce::String (response.statusCode)
                                        + " | parse=" + parseSuccess
                                        + " | tracks=" + juce::String (response.trackCount)
                                        + " | raw=" + rawResponse);
+                    requestProjectOverview();
+                    return;
                 }
                 else
                 {
@@ -1016,7 +1054,10 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
                     }
                     else
                     {
-                        plannedChangesText = response.analysisSummary.isNotEmpty() ? response.analysisSummary : plannedChangesText;
+                        if (response.analysisSummary.isNotEmpty())
+                            plannedChangesText = response.analysisSummary;
+                        else if (response.explanation.isNotEmpty())
+                            plannedChangesText = response.explanation;
                         planState = PlanState::idle;
                     }
                     appendActivityLog ("project chat request end | http " + juce::String (response.statusCode)
@@ -1030,6 +1071,28 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
                     planState = PlanState::error;
                     explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Project chat failed";
                     appendActivityLog ("project chat request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | error=" + explanationText
+                                       + " | raw=" + rawResponse);
+                }
+
+                break;
+            }
+
+            case volta::SessionRequestType::projectOverview:
+            {
+                if (response.succeeded)
+                {
+                    projectOverviewText = response.analysisSummary;
+                    explanationText = response.explanation.isNotEmpty() ? response.explanation : initialProjectBriefPrompt();
+                    appendActivityLog ("project overview request end | http " + juce::String (response.statusCode)
+                                       + " | parse=" + parseSuccess
+                                       + " | raw=" + rawResponse);
+                }
+                else
+                {
+                    explanationText = response.errorMessage.isNotEmpty() ? response.errorMessage : "Project overview failed";
+                    appendActivityLog ("project overview request end | http " + juce::String (response.statusCode)
                                        + " | parse=" + parseSuccess
                                        + " | error=" + explanationText
                                        + " | raw=" + rawResponse);

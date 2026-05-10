@@ -35,6 +35,11 @@ private:
     juce::String buildAssistantText (const juce::String& explanation,
                                      const juce::String& sessionStatus,
                                      const juce::String& analysisStatus) const;
+    juce::String buildResultPanelText (const juce::String& explanation,
+                                       const juce::String& plannedChanges) const;
+    juce::String buildResultPanelText (const juce::String& explanation,
+                                       const juce::String& overviewText,
+                                       const juce::String& plannedChanges) const;
     juce::String buildWorkflowGuide (const juce::String& sessionStatus,
                                      const juce::String& analysisStatus,
                                      bool hasStemFolder) const;

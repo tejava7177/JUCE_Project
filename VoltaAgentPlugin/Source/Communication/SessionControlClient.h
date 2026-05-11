@@ -55,6 +55,7 @@ struct SessionControlResponse
     int revision = 0;
     int uploadedTracks = 0;
     int namingApplyCount = 0;
+    int eqCleanupApplyCount = 0;
     juce::String status;
     juce::String explanation;
     juce::String errorMessage;
@@ -68,6 +69,8 @@ struct SessionControlResponse
     juce::String overviewTitle;
     juce::String namingApplyStatus;
     juce::String namingApprovalMode;
+    juce::String eqCleanupApplyStatus;
+    juce::String eqCleanupApprovalMode;
 };
 
 class SessionControlClient : private juce::Thread
@@ -794,6 +797,16 @@ private:
             }
         }
 
+        if (auto eqCleanupApplyValue = object->getProperty ("eq_cleanup_apply"); eqCleanupApplyValue.isObject())
+        {
+            if (auto* eqCleanupApplyObject = eqCleanupApplyValue.getDynamicObject())
+            {
+                response.eqCleanupApplyStatus = eqCleanupApplyObject->getProperty ("status").toString();
+                response.eqCleanupApplyCount = static_cast<int> (eqCleanupApplyObject->getProperty ("count"));
+                response.eqCleanupApprovalMode = eqCleanupApplyObject->getProperty ("approval_mode").toString();
+            }
+        }
+
         if (auto operationsValue = object->getProperty ("operations"); operationsValue.isArray())
         {
             if (auto* operationsArray = operationsValue.getArray())
@@ -830,6 +843,15 @@ private:
             {
                 if (auto* trackNamingObject = trackNamingValue.getDynamicObject())
                     response.analysisSummary = trackNamingObject->getProperty ("summary").toString();
+            }
+        }
+
+        if (response.analysisSummary.isEmpty())
+        {
+            if (auto eqCleanupValue = object->getProperty ("eq_cleanup"); eqCleanupValue.isObject())
+            {
+                if (auto* eqCleanupObject = eqCleanupValue.getDynamicObject())
+                    response.analysisSummary = eqCleanupObject->getProperty ("summary").toString();
             }
         }
 

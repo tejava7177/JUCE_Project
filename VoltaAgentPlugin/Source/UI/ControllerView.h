@@ -48,6 +48,7 @@ private:
                                       bool hasStemFolder) const;
     juce::String buildChatGuideText (const juce::String& analysisStatus) const;
     juce::String buildNamingApprovalGuideText (int pendingCount) const;
+    juce::String buildEqCleanupApprovalGuideText (int pendingCount) const;
     bool isSessionReady (const juce::String& sessionStatus) const;
     bool isAnalysisComplete (const juce::String& analysisStatus) const;
     bool isWaitingState (const juce::String& analysisStatus) const;

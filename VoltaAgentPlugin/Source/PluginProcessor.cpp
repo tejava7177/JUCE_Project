@@ -302,6 +302,18 @@ int VoltaAgentPluginAudioProcessor::getPendingNamingApprovalCount() const
     return projectSessionState.pendingNamingApprovalCount;
 }
 
+bool VoltaAgentPluginAudioProcessor::isEqCleanupApprovalPending() const
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    return projectSessionState.eqCleanupApprovalPending;
+}
+
+int VoltaAgentPluginAudioProcessor::getPendingEqCleanupApprovalCount() const
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    return projectSessionState.pendingEqCleanupApprovalCount;
+}
+
 bool VoltaAgentPluginAudioProcessor::canApplyPlan() const
 {
     const juce::ScopedLock scopedLock (statusLock);
@@ -493,6 +505,8 @@ void VoltaAgentPluginAudioProcessor::startAnalysisUpload()
         projectSessionState.analysisSessionId.clear();
         projectSessionState.namingApprovalPending = false;
         projectSessionState.pendingNamingApprovalCount = 0;
+        projectSessionState.eqCleanupApprovalPending = false;
+        projectSessionState.pendingEqCleanupApprovalCount = 0;
         projectSessionState.pendingAction = ProjectAction::createAndUploadStems;
         projectSessionState.pendingChatMessage.clear();
         lastSubmittedPrompt.clear();
@@ -568,6 +582,34 @@ void VoltaAgentPluginAudioProcessor::rejectPendingNamingProposal()
     projectSessionState.pendingNamingApprovalCount = 0;
     explanationText = juce::String::fromUTF8 (u8"네이밍과 그루핑 제안을 보류했습니다. 다른 이름 규칙이나 수정 요청을 바로 입력할 수 있습니다.");
     appendActivityLog ("naming approval dismissed locally");
+}
+
+void VoltaAgentPluginAudioProcessor::approvePendingEqCleanupProposal()
+{
+    juce::String endpoint;
+
+    {
+        const juce::ScopedLock scopedLock (statusLock);
+
+        if (projectSessionState.projectSessionId.isEmpty() || ! projectSessionState.eqCleanupApprovalPending)
+            return;
+
+        endpoint = buildSessionEndpoint (getServerEndpointText(), "/projects/" + projectSessionState.projectSessionId + "/chat");
+        explanationText = "Submitting EQ cleanup approval...";
+        appendActivityLog ("project chat request start | POST " + endpoint + " | prompt=로우컷 하이컷 승인");
+    }
+
+    requestInFlight.store (true);
+    sessionControlClient.requestProjectChat (endpoint, juce::String::fromUTF8 (u8"로우컷 하이컷 승인"));
+}
+
+void VoltaAgentPluginAudioProcessor::rejectPendingEqCleanupProposal()
+{
+    const juce::ScopedLock scopedLock (statusLock);
+    projectSessionState.eqCleanupApprovalPending = false;
+    projectSessionState.pendingEqCleanupApprovalCount = 0;
+    explanationText = juce::String::fromUTF8 (u8"로우컷과 하이컷 제안을 보류했습니다. 다른 EQ 규칙이나 수정 요청을 바로 입력할 수 있습니다.");
+    appendActivityLog ("eq cleanup approval dismissed locally");
 }
 
 juce::String VoltaAgentPluginAudioProcessor::buildServerBaseUrl (const juce::String& serverEndpoint)
@@ -1097,6 +1139,17 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
                         projectSessionState.pendingNamingApprovalCount = 0;
                     }
 
+                    if (response.eqCleanupApplyStatus == "awaiting_approval")
+                    {
+                        projectSessionState.eqCleanupApprovalPending = true;
+                        projectSessionState.pendingEqCleanupApprovalCount = response.eqCleanupApplyCount;
+                    }
+                    else if (response.eqCleanupApplyStatus == "approved_pending_executor")
+                    {
+                        projectSessionState.eqCleanupApprovalPending = false;
+                        projectSessionState.pendingEqCleanupApprovalCount = 0;
+                    }
+
                     if (! lastPlanOperations.isEmpty())
                     {
                         auto operationText = formatOperationsText (lastPlanOperations);
@@ -1118,6 +1171,7 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
                                        + " | parse=" + parseSuccess
                                        + " | operations=" + juce::String (lastPlanOperations.size())
                                        + " | naming_apply=" + response.namingApplyStatus
+                                       + " | eq_cleanup_apply=" + response.eqCleanupApplyStatus
                                        + " | raw=" + rawResponse);
                 }
                 else

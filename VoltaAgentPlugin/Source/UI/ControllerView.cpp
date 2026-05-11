@@ -299,7 +299,7 @@ void ControllerView::resized()
     stemFolderValue.setBounds (stepContent);
 
     auto keepContent = keepCard.reduced (16);
-    auto showApprovalButtons = audioProcessor.isNamingApprovalPending();
+    auto showApprovalButtons = audioProcessor.isNamingApprovalPending() || audioProcessor.isEqCleanupApprovalPending();
     if (showApprovalButtons)
     {
         auto approvalArea = keepContent.withTrimmedTop (juce::jmax (0, (keepContent.getHeight() - 78) / 2));
@@ -362,10 +362,15 @@ void ControllerView::refreshState()
     auto shouldShowResultPanel = analysisComplete && (hasOverview || hasSubmittedPrompt);
     auto namingApprovalPending = audioProcessor.isNamingApprovalPending();
     auto pendingNamingCount = audioProcessor.getPendingNamingApprovalCount();
+    auto eqCleanupApprovalPending = audioProcessor.isEqCleanupApprovalPending();
+    auto pendingEqCleanupCount = audioProcessor.getPendingEqCleanupApprovalCount();
+    auto anyApprovalPending = namingApprovalPending || eqCleanupApprovalPending;
 
     progressValue.setText (namingApprovalPending
                                ? buildNamingApprovalGuideText (pendingNamingCount)
-                               : buildNextActionText (sessionStatus, analysisStatus, hasStemFolder),
+                               : (eqCleanupApprovalPending
+                                      ? buildEqCleanupApprovalGuideText (pendingEqCleanupCount)
+                                      : buildNextActionText (sessionStatus, analysisStatus, hasStemFolder)),
                            juce::dontSendNotification);
     stemFolderValue.setText (hasStemFolder ? juce::File (stemFolderPath).getFileName() : korean ("\xEC\x95\x84\xEC\xA7\x81 \xED\x8F\xB4\xEB\x8D\x94\xEA\xB0\x80 \xEC\x97\x86\xEC\x8A\xB5\xEB\x8B\x88\xEB\x8B\xA4."),
                             juce::dontSendNotification);
@@ -374,18 +379,24 @@ void ControllerView::refreshState()
                                 : korean ("\xEC\x8B\x9C\xEC\x9E\x91 \xEC\x88\x9C\xEC\x84\x9C"),
                             juce::dontSendNotification);
     assistantBubble.setText (shouldShowResultPanel
-                                 ? buildResultPanelText (explanation, projectOverview, plannedChanges)
+                                 ? (anyApprovalPending
+                                        ? buildResultPanelText (explanation, plannedChanges)
+                                        : buildResultPanelText (explanation, projectOverview, plannedChanges))
                                  : buildWorkflowGuide (sessionStatus, analysisStatus, hasStemFolder),
                              juce::dontSendNotification);
     userBubble.setText (audioProcessor.getLastSubmittedPromptText().isNotEmpty() ? audioProcessor.getLastSubmittedPromptText() : noUserPromptLine(),
                         juce::dontSendNotification);
-    plannedChangesValue.setText (analysisComplete ? (hasOverview ? projectOverview
-                                                                 : (plannedChanges.isNotEmpty() ? plannedChanges : previewPlaceholder()))
+    plannedChangesValue.setText (analysisComplete ? (anyApprovalPending
+                                                           ? (plannedChanges.isNotEmpty() ? plannedChanges : explanation)
+                                                           : (hasOverview ? projectOverview
+                                                                          : (plannedChanges.isNotEmpty() ? plannedChanges : previewPlaceholder())))
                                                   : buildAssistantText (explanation, sessionStatus, analysisStatus),
                                  juce::dontSendNotification);
     plannedChangesTitle.setText (namingApprovalPending
                                      ? juce::String::fromUTF8 (u8"네이밍 / 그룹핑 제안")
-                                     : korean ("\xEB\xB6\x84\xEC\x84\x9D \xEC\x83\x81\xED\x83\x9C / \xEC\x95\x88\xEB\x82\xB4"),
+                                     : (eqCleanupApprovalPending
+                                            ? juce::String::fromUTF8 (u8"로우컷 / 하이컷 제안")
+                                            : korean ("\xEB\xB6\x84\xEC\x84\x9D \xEC\x83\x81\xED\x83\x9C / \xEC\x95\x88\xEB\x82\xB4")),
                                  juce::dontSendNotification);
 
     if (promptEditor.getText() != promptText)
@@ -417,17 +428,21 @@ void ControllerView::refreshState()
     refreshSessionButton.setEnabled (! busy);
     chooseStemFolderButton.setEnabled (! busy);
     analyzeStemsButton.setEnabled (! busy && sessionReady && hasStemFolder);
-    approveNamingButton.setEnabled (! busy && namingApprovalPending);
-    rejectNamingButton.setEnabled (! busy && namingApprovalPending);
-    refreshSessionButton.setVisible (! namingApprovalPending);
-    chooseStemFolderButton.setVisible (! namingApprovalPending);
-    analyzeStemsButton.setVisible (! namingApprovalPending);
-    approveNamingButton.setVisible (namingApprovalPending);
-    rejectNamingButton.setVisible (namingApprovalPending);
+    approveNamingButton.setEnabled (! busy && anyApprovalPending);
+    rejectNamingButton.setEnabled (! busy && anyApprovalPending);
+    refreshSessionButton.setVisible (! anyApprovalPending);
+    chooseStemFolderButton.setVisible (! anyApprovalPending);
+    analyzeStemsButton.setVisible (! anyApprovalPending);
+    approveNamingButton.setVisible (anyApprovalPending);
+    rejectNamingButton.setVisible (anyApprovalPending);
     analyzeStemsButton.setTooltip (sessionReady ? (hasStemFolder ? juce::String() : korean ("\xEB\xA8\xBC\xEC\xA0\x80 WAV \xED\x8F\xB4\xEB\x8D\x94\xEB\xA5\xBC \xEC\xB6\x94\xEA\xB0\x80\xED\x95\x98\xEC\x84\xB8\xEC\x9A\x94."))
                                                : korean ("\xEB\xA8\xBC\xEC\xA0\x80 Ableton \xEC\xA0\x95\xEB\xB3\xB4\xEB\xA5\xBC \xEB\xB6\x88\xEB\x9F\xAC\xEC\x98\xA4\xEC\x84\xB8\xEC\x9A\x94."));
-    approveNamingButton.setTooltip (juce::String::fromUTF8 (u8"제안된 트랙 네이밍과 그룹핑 결과를 적용 대기열에 올립니다."));
-    rejectNamingButton.setTooltip (juce::String::fromUTF8 (u8"현재 네이밍/그룹핑 제안 표시를 보류하고 다른 요청을 이어갑니다."));
+    approveNamingButton.setTooltip (namingApprovalPending
+                                          ? juce::String::fromUTF8 (u8"제안된 트랙 네이밍과 그룹핑 결과를 적용 대기열에 올립니다.")
+                                          : juce::String::fromUTF8 (u8"제안된 로우컷/하이컷 정리 결과를 승인합니다."));
+    rejectNamingButton.setTooltip (namingApprovalPending
+                                         ? juce::String::fromUTF8 (u8"현재 네이밍/그룹핑 제안 표시를 보류하고 다른 요청을 이어갑니다.")
+                                         : juce::String::fromUTF8 (u8"현재 로우컷/하이컷 제안 표시를 보류하고 다른 요청을 이어갑니다."));
     planButton.setButtonText (busy ? korean ("\xEC\x9E\x91\xEC\x97\x85 \xEC\xA4\x91...") : korean ("\xEC\x9A\x94\xEC\xB2\xAD \xEB\xB3\xB4\xEB\x82\xB4\xEA\xB8\xB0"));
     promptEditor.setTooltip (buildChatGuideText (analysisStatus));
 
@@ -505,11 +520,17 @@ void ControllerView::buttonClicked (juce::Button* button)
     }
     else if (button == &approveNamingButton)
     {
-        audioProcessor.approvePendingNamingProposal();
+        if (audioProcessor.isNamingApprovalPending())
+            audioProcessor.approvePendingNamingProposal();
+        else if (audioProcessor.isEqCleanupApprovalPending())
+            audioProcessor.approvePendingEqCleanupProposal();
     }
     else if (button == &rejectNamingButton)
     {
-        audioProcessor.rejectPendingNamingProposal();
+        if (audioProcessor.isNamingApprovalPending())
+            audioProcessor.rejectPendingNamingProposal();
+        else if (audioProcessor.isEqCleanupApprovalPending())
+            audioProcessor.rejectPendingEqCleanupProposal();
     }
 
     refreshState();
@@ -613,6 +634,18 @@ juce::String ControllerView::buildNamingApprovalGuideText (int pendingCount) con
     }
 
     return juce::String::fromUTF8 (u8"네이밍과 그루핑 제안이 준비되었습니다. 아래 승인 또는 거절 버튼을 눌러주세요.");
+}
+
+juce::String ControllerView::buildEqCleanupApprovalGuideText (int pendingCount) const
+{
+    if (pendingCount > 0)
+    {
+        return juce::String::fromUTF8 (u8"로우컷과 하이컷 제안이 준비되었습니다. ")
+             + juce::String (pendingCount)
+             + juce::String::fromUTF8 (u8"개 필터 제안을 검토한 뒤 아래 승인 또는 거절 버튼을 눌러주세요.");
+    }
+
+    return juce::String::fromUTF8 (u8"로우컷과 하이컷 제안이 준비되었습니다. 아래 승인 또는 거절 버튼을 눌러주세요.");
 }
 
 juce::String ControllerView::buildChatGuideText (const juce::String& analysisStatus) const

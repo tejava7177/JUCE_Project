@@ -91,6 +91,8 @@ public:
     juce::String getLastSubmittedPromptText() const;
     bool isNamingApprovalPending() const;
     int getPendingNamingApprovalCount() const;
+    bool isEqCleanupApprovalPending() const;
+    int getPendingEqCleanupApprovalCount() const;
     bool canApplyPlan() const;
     bool isRequestInFlight() const;
     bool canStartAnalysisUpload() const;
@@ -103,6 +105,8 @@ public:
     void startAnalysisUpload();
     void approvePendingNamingProposal();
     void rejectPendingNamingProposal();
+    void approvePendingEqCleanupProposal();
+    void rejectPendingEqCleanupProposal();
 
 private:
     struct SessionSummaryState
@@ -135,6 +139,8 @@ private:
         juce::String pendingChatMessage;
         bool namingApprovalPending = false;
         int pendingNamingApprovalCount = 0;
+        bool eqCleanupApprovalPending = false;
+        int pendingEqCleanupApprovalCount = 0;
         ProjectAction pendingAction = ProjectAction::none;
     };
 

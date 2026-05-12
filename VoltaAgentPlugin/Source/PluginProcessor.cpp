@@ -1144,7 +1144,8 @@ void VoltaAgentPluginAudioProcessor::handleSessionControlResponse (const volta::
                         projectSessionState.eqCleanupApprovalPending = true;
                         projectSessionState.pendingEqCleanupApprovalCount = response.eqCleanupApplyCount;
                     }
-                    else if (response.eqCleanupApplyStatus == "approved_pending_executor")
+                    else if (response.eqCleanupApplyStatus == "approved_pending_executor"
+                             || response.eqCleanupApplyStatus == "staged")
                     {
                         projectSessionState.eqCleanupApprovalPending = false;
                         projectSessionState.pendingEqCleanupApprovalCount = 0;

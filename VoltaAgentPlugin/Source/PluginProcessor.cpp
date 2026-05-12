@@ -8,7 +8,7 @@ constexpr auto stemFolderProperty = "stemFolder";
 
 juce::String initialProjectBriefPrompt()
 {
-    return juce::String::fromUTF8 (u8"프로젝트에 대해 간단히 설명해주세요. 장르, 보컬 유무, 주요 악기, 원하는 작업이 있으면 같이 알려주세요.");
+    return juce::String::fromUTF8 (u8"기본 질문 : 프로젝트에 대해 간단히 설명해주세요. 장르, 보컬 유무, 주요 악기, 원하는 작업이 있으면 같이 알려주세요.");
 }
 }
 

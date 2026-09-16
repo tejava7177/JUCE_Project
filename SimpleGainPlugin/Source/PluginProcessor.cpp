@@ -1,253 +1,126 @@
-/*
-  ==============================================================================
-
-    This file contains the basic framework code for a JUCE plugin processor.
-
-  ==============================================================================
-*/
-
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "DSP/GainDsp.h"
 
-//==============================================================================
-SimpleGainPluginAudioProcessor::SimpleGainPluginAudioProcessor()
-#ifndef JucePlugin_PreferredChannelConfigurations
-     : AudioProcessor (BusesProperties()
-                     #if ! JucePlugin_IsMidiEffect
-                      #if ! JucePlugin_IsSynth
-                       .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                      #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
-                     #endif
-                       )
-#endif
-     , apvts (*this, nullptr, "Parameters", createParameterLayout())
+GainLabAudioProcessor::GainLabAudioProcessor()
+    : AudioProcessor (BusesProperties()
+                          .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      parameters_ (*this, nullptr, "PARAMETERS", createParameterLayout())
 {
+    // DAW나 UI가 바꾸는 Gain 값을 오디오 스레드에서 안전하게 읽기 위한 포인터다.
+    gainDb_ = parameters_.getRawParameterValue (gainParameterId);
 }
 
-SimpleGainPluginAudioProcessor::~SimpleGainPluginAudioProcessor()
+juce::AudioProcessorValueTreeState::ParameterLayout
+GainLabAudioProcessor::createParameterLayout()
 {
-}
+    juce::AudioProcessorValueTreeState::ParameterLayout layout;
 
-juce::AudioProcessorValueTreeState::ParameterLayout SimpleGainPluginAudioProcessor::createParameterLayout()
-{
-    std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameters;
-
-    parameters.push_back (std::make_unique<juce::AudioParameterFloat> (
-        "gain_db",
+    // 사용자가 보는 값은 dB다. 0 dB는 원래 크기, 음수는 감쇄, 양수는 증폭이다.
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { gainParameterId, 1 },
         "Gain",
-        juce::NormalisableRange<float> (-24.0f, 24.0f, 0.1f),
-        0.0f));
+        juce::NormalisableRange<float> { -60.0f, 12.0f, 0.1f },
+        0.0f,
+        juce::AudioParameterFloatAttributes().withLabel ("dB")));
 
-    return { parameters.begin(), parameters.end() };
+    return layout;
 }
 
-float SimpleGainPluginAudioProcessor::getRmsDb() const          { return rmsDb.load(); }
-float SimpleGainPluginAudioProcessor::getPeakDb() const         { return peakDb.load(); }
-float SimpleGainPluginAudioProcessor::getCrestFactorDb() const  { return crestFactorDb.load(); }
-int SimpleGainPluginAudioProcessor::getClipCount() const        { return clipCount.load(); }
-float SimpleGainPluginAudioProcessor::getSilenceRatio() const   { return silenceRatio.load(); }
-
-//==============================================================================
-const juce::String SimpleGainPluginAudioProcessor::getName() const
+const juce::String GainLabAudioProcessor::getName() const
 {
     return JucePlugin_Name;
 }
 
-bool SimpleGainPluginAudioProcessor::acceptsMidi() const
+void GainLabAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-   #if JucePlugin_WantsMidiInput
-    return true;
-   #else
-    return false;
-   #endif
+    juce::ignoreUnused (sampleRate, samplesPerBlock);
 }
 
-bool SimpleGainPluginAudioProcessor::producesMidi() const
-{
-   #if JucePlugin_ProducesMidiOutput
-    return true;
-   #else
-    return false;
-   #endif
-}
-
-bool SimpleGainPluginAudioProcessor::isMidiEffect() const
-{
-   #if JucePlugin_IsMidiEffect
-    return true;
-   #else
-    return false;
-   #endif
-}
-
-double SimpleGainPluginAudioProcessor::getTailLengthSeconds() const
-{
-    return 0.0;
-}
-
-int SimpleGainPluginAudioProcessor::getNumPrograms()
-{
-    return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
-                // so this should be at least 1, even if you're not really implementing programs.
-}
-
-int SimpleGainPluginAudioProcessor::getCurrentProgram()
-{
-    return 0;
-}
-
-void SimpleGainPluginAudioProcessor::setCurrentProgram (int index)
+void GainLabAudioProcessor::releaseResources()
 {
 }
 
-const juce::String SimpleGainPluginAudioProcessor::getProgramName (int index)
+bool GainLabAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    return {};
-}
+    const auto output = layouts.getMainOutputChannelSet();
 
-void SimpleGainPluginAudioProcessor::changeProgramName (int index, const juce::String& newName)
-{
-}
-
-//==============================================================================
-void SimpleGainPluginAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
-{
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
-}
-
-void SimpleGainPluginAudioProcessor::releaseResources()
-{
-    // When playback stops, you can use this as an opportunity to free up any
-    // spare memory, etc.
-}
-
-#ifndef JucePlugin_PreferredChannelConfigurations
-bool SimpleGainPluginAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
-{
-  #if JucePlugin_IsMidiEffect
-    juce::ignoreUnused (layouts);
-    return true;
-  #else
-    // This is the place where you check if the layout is supported.
-    // In this template code we only support mono or stereo.
-    // Some plugin hosts, such as certain GarageBand versions, will only
-    // load plugins that support stereo bus layouts.
-    if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
-     && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
+    if (output != juce::AudioChannelSet::mono()
+        && output != juce::AudioChannelSet::stereo())
         return false;
 
-    // This checks if the input layout matches the output layout
-   #if ! JucePlugin_IsSynth
-    if (layouts.getMainOutputChannelSet() != layouts.getMainInputChannelSet())
-        return false;
-   #endif
-
-    return true;
-  #endif
+    return output == layouts.getMainInputChannelSet();
 }
-#endif
 
-void SimpleGainPluginAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+void GainLabAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
+                                          juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
     juce::ignoreUnused (midiMessages);
 
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
-    auto numSamples = buffer.getNumSamples();
+    const auto inputChannels = getTotalNumInputChannels();
+    const auto outputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, numSamples);
+    for (auto channel = inputChannels; channel < outputChannels; ++channel)
+        buffer.clear (channel, 0, buffer.getNumSamples());
 
-    auto gainDb = apvts.getRawParameterValue ("gain_db")->load();
-    auto gain = juce::Decibels::decibelsToGain (gainDb);
+    // 1. 노브에서 전달된 dB 값을 읽는다.
+    //    예: -6.0206 dB는 진폭을 정확히 절반으로 만드는 값이다.
+    const auto gainDb = gainDb_->load (std::memory_order_relaxed);
 
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-        buffer.applyGain (channel, 0, numSamples, gain);
+    // 2. 샘플에는 dB를 직접 곱할 수 없으므로 선형 배수로 변환한다.
+    //    공식: linearGain = 10 ^ (dB / 20)
+    const auto linearGain = gainlab::GainDsp::decibelsToLinear (gainDb);
 
-    auto sumOfSquares = 0.0f;
-    auto peak = 0.0f;
-    auto clips = 0;
-    auto silentSamples = 0;
-
-    constexpr auto clipThreshold = 1.0f;
-    constexpr auto silenceThreshold = 0.001f;
-
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    // 3. 각 채널의 모든 샘플에 같은 배수를 곱한다.
+    //    getWritePointer()가 반환하는 주소는 DAW가 전달한 실제 샘플 메모리다.
+    for (auto channel = 0; channel < inputChannels; ++channel)
     {
-        auto* channelData = buffer.getReadPointer (channel);
-
-        for (int sample = 0; sample < numSamples; ++sample)
-        {
-            auto sampleValue = channelData[sample];
-            auto absoluteSampleValue = std::abs (sampleValue);
-
-            sumOfSquares += sampleValue * sampleValue;
-            peak = juce::jmax (peak, absoluteSampleValue);
-
-            if (absoluteSampleValue >= clipThreshold)
-                ++clips;
-
-            if (absoluteSampleValue < silenceThreshold)
-                ++silentSamples;
-        }
-    }
-
-    auto numberOfSamples = totalNumInputChannels * numSamples;
-    auto rms = numberOfSamples > 0 ? std::sqrt (sumOfSquares / static_cast<float> (numberOfSamples)) : 0.0f;
-    auto newRmsDb = juce::Decibels::gainToDecibels (rms, -100.0f);
-    auto newPeakDb = juce::Decibels::gainToDecibels (peak, -100.0f);
-    auto newSilenceRatio = numberOfSamples > 0
-        ? static_cast<float> (silentSamples) / static_cast<float> (numberOfSamples)
-        : 1.0f;
-
-    rmsDb.store (newRmsDb);
-    peakDb.store (newPeakDb);
-    crestFactorDb.store (newPeakDb - newRmsDb);
-    clipCount.store (clips);
-    silenceRatio.store (newSilenceRatio);
-}
-
-//==============================================================================
-bool SimpleGainPluginAudioProcessor::hasEditor() const
-{
-    return true; // (change this to false if you choose to not supply an editor)
-}
-
-juce::AudioProcessorEditor* SimpleGainPluginAudioProcessor::createEditor()
-{
-    return new SimpleGainPluginAudioProcessorEditor (*this);
-}
-
-//==============================================================================
-void SimpleGainPluginAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
-{
-    if (auto state = apvts.copyState(); auto xml = state.createXml())
-        copyXmlToBinary (*xml, destData);
-}
-
-void SimpleGainPluginAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
-{
-    if (auto xmlState = getXmlFromBinary (data, sizeInBytes))
-    {
-        auto state = juce::ValueTree::fromXml (*xmlState);
-
-        if (state.isValid())
-            apvts.replaceState (state);
+        auto* samples = buffer.getWritePointer (channel);
+        gainlab::GainDsp::applyGain (samples, buffer.getNumSamples(), linearGain);
     }
 }
 
-//==============================================================================
-// This creates new instances of the plugin..
+bool GainLabAudioProcessor::hasEditor() const
+{
+    return true;
+}
+
+juce::AudioProcessorEditor* GainLabAudioProcessor::createEditor()
+{
+    return new GainLabAudioProcessorEditor (*this);
+}
+
+bool GainLabAudioProcessor::acceptsMidi() const  { return false; }
+bool GainLabAudioProcessor::producesMidi() const { return false; }
+bool GainLabAudioProcessor::isMidiEffect() const { return false; }
+double GainLabAudioProcessor::getTailLengthSeconds() const { return 0.0; }
+
+int GainLabAudioProcessor::getNumPrograms() { return 1; }
+int GainLabAudioProcessor::getCurrentProgram() { return 0; }
+void GainLabAudioProcessor::setCurrentProgram (int) {}
+const juce::String GainLabAudioProcessor::getProgramName (int) { return {}; }
+void GainLabAudioProcessor::changeProgramName (int, const juce::String&) {}
+
+void GainLabAudioProcessor::getStateInformation (juce::MemoryBlock& destinationData)
+{
+    // Logic 프로젝트를 저장할 때 현재 Gain 값도 함께 저장한다.
+    const auto state = parameters_.copyState();
+    const auto xml = state.createXml();
+    copyXmlToBinary (*xml, destinationData);
+}
+
+void GainLabAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+{
+    // Logic 프로젝트를 다시 열 때 저장했던 Gain 값을 복원한다.
+    const auto xml = getXmlFromBinary (data, sizeInBytes);
+
+    if (xml != nullptr && xml->hasTagName (parameters_.state.getType()))
+        parameters_.replaceState (juce::ValueTree::fromXml (*xml));
+}
+
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new SimpleGainPluginAudioProcessor();
+    return new GainLabAudioProcessor();
 }

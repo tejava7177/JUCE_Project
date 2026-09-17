@@ -1,3 +1,4 @@
+#include "DSP/DelayDsp.h"
 #include "DSP/DryWetDsp.h"
 #include "DSP/GainDsp.h"
 #include "DSP/LinearSmoother.h"
@@ -90,6 +91,33 @@ int main()
         return 1;
     }
 
+    // 1,000 Hz에서는 3 samples가 3 ms다. 첫 impulse가 3 samples 뒤에 나타나고,
+    // Feedback 50% 때문에 다시 3 samples 뒤에는 절반 크기로 반복되어야 한다.
+    gainlab::DelayDsp delay;
+    delay.prepare (1000.0, 100.0f, 1);
+
+    float delayOutput[7] {};
+    for (int sample = 0; sample < 7; ++sample)
+    {
+        const auto input = sample == 0 ? 1.0f : 0.0f;
+        delayOutput[sample] = delay.processSample (0, input, 3.0f, 0.5f);
+        delay.advance();
+    }
+
+    printSamples ("Delay impulse:", delayOutput, 7);
+
+    const float expectedDelay[] { 0.0f, 0.0f, 0.0f, 1.0f,
+                                  0.0f, 0.0f, 0.5f };
+    for (int i = 0; i < 7; ++i)
+    {
+        if (! nearlyEqual (delayOutput[i], expectedDelay[i]))
+        {
+            std::cerr << "FAIL: Delay의 " << i
+                      << "번째 샘플이 예상값과 다릅니다.\n";
+            return 1;
+        }
+    }
+
     // Smoothing 상태가 두 개의 오디오 블록 사이에서도 이어지는지 확인한다.
     // 테스트를 보기 쉽게 1,000 Hz * 0.004초 = 4 samples로 설정한다.
     gainlab::LinearSmoother smoother;
@@ -125,6 +153,6 @@ int main()
         return 1;
     }
 
-    std::cout << "PASS: Gain, Dry/Wet, smoothing 테스트를 모두 통과했습니다.\n";
+    std::cout << "PASS: Gain, Dry/Wet, Delay, smoothing 테스트를 모두 통과했습니다.\n";
     return 0;
 }

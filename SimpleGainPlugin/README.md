@@ -1,9 +1,12 @@
 # GainLab
 
-Gain 하나를 통해 JUCE 플러그인의 전체 흐름을 배우는 첫 번째 실습 프로젝트입니다.
+Gain에서 시작해 기본 DSP를 하나씩 연결하며 JUCE 플러그인의 전체 흐름을 배우는
+첫 번째 실습 프로젝트입니다.
 
 ```text
-UI 노브 → JUCE 파라미터 → processBlock() → Gain DSP → 출력 샘플
+입력 → Gain → Delay 버퍼 → Wet
+  └──────────────────────→ Dry
+              Dry/Wet 혼합 → 출력
 ```
 
 ## 현재 구현
@@ -11,25 +14,33 @@ UI 노브 → JUCE 파라미터 → processBlock() → Gain DSP → 출력 샘�
 - AU, VST3, Standalone
 - 모노·스테레오 입력/출력
 - Gain 범위 `-60 dB ~ +12 dB`
+- Delay Time 범위 `1 ms ~ 1000 ms`
+- Feedback 범위 `0% ~ 95%`
 - Dry/Wet 범위 `0% ~ 100%`
 - UI 노브와 DAW 파라미터 연결
 - 파라미터 저장·복원
-- 20 ms 선형 Gain smoothing
-- JUCE와 분리된 순수 Gain DSP
+- Gain, Delay Time, Feedback, Mix에 20 ms 선형 smoothing
+- JUCE와 분리된 순수 Gain·Delay·Dry/Wet DSP
 - DAW 없이 실행하는 DSP 자동 테스트
 
-Dry/Wet은 `Output = Dry × (1 - Mix) + Wet × Mix`로 계산합니다. Gain과 Mix smoother는
-Processor 멤버로 유지되어 오디오 블록이 바뀌어도 이전 블록의 진행 상태를 이어갑니다.
-현재 smoother는 원리를 확인하기 위한 직접 구현이며 다음 학습 주제는 Delay입니다.
+Delay는 원형 버퍼에 현재 샘플을 저장하고 `Delay Time`만큼 과거의 샘플을 읽습니다.
+`Feedback`은 읽은 샘플 일부를 버퍼에 다시 넣어 반복음을 만듭니다. Dry/Wet은
+`Output = Dry × (1 - Mix) + Wet × Mix`로 계산합니다. Send/Aux에서 사용할 때는 원본
+트랙이 이미 Dry를 재생하므로 Mix를 `100% Wet`으로 두는 것이 기본입니다.
+
+Delay 버퍼와 smoother는 Processor 멤버로 유지되어 오디오 블록이 바뀌어도 과거 샘플과
+진행 상태를 이어갑니다. 재생 중 메모리 할당을 피하기 위해 Delay 버퍼는
+`prepareToPlay()`에서 미리 준비합니다.
 
 ## 코드 구조
 
 ```text
+Source/DSP/DelayDsp.h       원형 버퍼, 시간 지연, feedback
 Source/DSP/DryWetDsp.h      원본과 처리 결과 혼합
 Source/DSP/GainDsp.h       dB 변환과 샘플 곱셈
 Source/DSP/LinearSmoother.h 블록 사이에 유지되는 선형 ramp
 Source/PluginProcessor.*   DAW 버퍼·파라미터와 DSP 연결
-Source/PluginEditor.*      플러그인 화면과 Gain 노브
+Source/PluginEditor.*      플러그인 화면과 네 개의 노브
 Tests/GainDspTests.cpp     알려진 샘플 배열로 DSP 검증
 ```
 
@@ -65,9 +76,10 @@ VS Code에서는 `Tasks: Run Test Task`에서 `GainLab: Run DSP Test`를 선택�
 Gain: -6.0206 dB -> 0.5배
 출력 샘플: [ 0.5, 0.25, -0.25, -0.5 ]
 Dry/Wet 0%, 50%, 100%: [ 0.8, 0.6, 0.4 ]
+Delay impulse: [ 0, 0, 0, 1, 0, 0, 0.5 ]
 Smoothing block 1: [ 0.875, 0.75 ]
 Smoothing block 2: [ 0.625, 0.5 ]
-PASS: Gain, Dry/Wet, smoothing 테스트를 모두 통과했습니다.
+PASS: Gain, Dry/Wet, Delay, smoothing 테스트를 모두 통과했습니다.
 ```
 
 ## macOS 개발용 설치 위치

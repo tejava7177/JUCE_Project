@@ -14,12 +14,15 @@ EqLabAudioProcessorEditor::EqLabAudioProcessorEditor (EqLabAudioProcessor& audio
     subtitleLabel_.setColour (juce::Label::textColourId, juce::Colour (0xff9aa8b8));
     addAndMakeVisible (subtitleLabel_);
 
-    firLabel_.setText ("FIR\n현재 + 과거 입력", juce::dontSendNotification);
+    // JUCE에 UTF-8 문자열임을 명시해야 한글 바이트가 깨지지 않는다.
+    firLabel_.setText (juce::String::fromUTF8 (u8"FIR\n현재 + 과거 입력"),
+                       juce::dontSendNotification);
     firLabel_.setJustificationType (juce::Justification::centred);
     firLabel_.setColour (juce::Label::textColourId, juce::Colour (0xff6fb4ff));
     addAndMakeVisible (firLabel_);
 
-    iirLabel_.setText ("IIR / BIQUAD\n입력 + 과거 출력", juce::dontSendNotification);
+    iirLabel_.setText (juce::String::fromUTF8 (u8"IIR / BIQUAD\n입력 + 과거 출력"),
+                       juce::dontSendNotification);
     iirLabel_.setJustificationType (juce::Justification::centred);
     iirLabel_.setColour (juce::Label::textColourId, juce::Colour (0xffffb467));
     addAndMakeVisible (iirLabel_);

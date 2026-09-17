@@ -11,18 +11,21 @@ UI 노브 → JUCE 파라미터 → processBlock() → Gain DSP → 출력 샘�
 - AU, VST3, Standalone
 - 모노·스테레오 입력/출력
 - Gain 범위 `-60 dB ~ +12 dB`
+- Dry/Wet 범위 `0% ~ 100%`
 - UI 노브와 DAW 파라미터 연결
 - 파라미터 저장·복원
 - 20 ms 선형 Gain smoothing
 - JUCE와 분리된 순수 Gain DSP
 - DAW 없이 실행하는 DSP 자동 테스트
 
-Smoother는 Processor 멤버로 유지되어 오디오 블록이 바뀌어도 이전 블록의 진행 상태를
-이어갑니다. 현재는 원리를 확인하기 위한 직접 구현이며 다음 학습 주제는 Dry/Wet입니다.
+Dry/Wet은 `Output = Dry × (1 - Mix) + Wet × Mix`로 계산합니다. Gain과 Mix smoother는
+Processor 멤버로 유지되어 오디오 블록이 바뀌어도 이전 블록의 진행 상태를 이어갑니다.
+현재 smoother는 원리를 확인하기 위한 직접 구현이며 다음 학습 주제는 Delay입니다.
 
 ## 코드 구조
 
 ```text
+Source/DSP/DryWetDsp.h      원본과 처리 결과 혼합
 Source/DSP/GainDsp.h       dB 변환과 샘플 곱셈
 Source/DSP/LinearSmoother.h 블록 사이에 유지되는 선형 ramp
 Source/PluginProcessor.*   DAW 버퍼·파라미터와 DSP 연결
@@ -61,9 +64,10 @@ VS Code에서는 `Tasks: Run Test Task`에서 `GainLab: Run DSP Test`를 선택�
 입력 샘플: [ 1, 0.5, -0.5, -1 ]
 Gain: -6.0206 dB -> 0.5배
 출력 샘플: [ 0.5, 0.25, -0.25, -0.5 ]
+Dry/Wet 0%, 50%, 100%: [ 0.8, 0.6, 0.4 ]
 Smoothing block 1: [ 0.875, 0.75 ]
 Smoothing block 2: [ 0.625, 0.5 ]
-PASS: Gain과 smoothing 테스트를 모두 통과했습니다.
+PASS: Gain, Dry/Wet, smoothing 테스트를 모두 통과했습니다.
 ```
 
 ## macOS 개발용 설치 위치

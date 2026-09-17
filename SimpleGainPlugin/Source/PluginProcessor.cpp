@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "DSP/DryWetDsp.h"
 #include "DSP/GainDsp.h"
 
 GainLabAudioProcessor::GainLabAudioProcessor()
@@ -10,6 +11,7 @@ GainLabAudioProcessor::GainLabAudioProcessor()
 {
     // DAW나 UI가 바꾸는 Gain 값을 오디오 스레드에서 안전하게 읽기 위한 포인터다.
     gainDb_ = parameters_.getRawParameterValue (gainParameterId);
+    mixPercent_ = parameters_.getRawParameterValue (mixParameterId);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout
@@ -25,6 +27,14 @@ GainLabAudioProcessor::createParameterLayout()
         0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("dB")));
 
+    // 0%는 원본만, 100%는 Gain 처리 결과만 출력한다.
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { mixParameterId, 1 },
+        "Mix",
+        juce::NormalisableRange<float> { 0.0f, 100.0f, 1.0f },
+        100.0f,
+        juce::AudioParameterFloatAttributes().withLabel ("%")));
+
     return layout;
 }
 
@@ -38,13 +48,18 @@ void GainLabAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
     juce::ignoreUnused (samplesPerBlock);
 
     // ms 단위의 smoothing 시간을 현재 sample rate에 맞는 샘플 개수로 변환한다.
-    gainSmoother_.prepare (sampleRate, gainSmoothingSeconds);
+    gainSmoother_.prepare (sampleRate, parameterSmoothingSeconds);
+    mixSmoother_.prepare (sampleRate, parameterSmoothingSeconds);
 
     // 플러그인을 처음 켰을 때 1.0에서 저장된 Gain까지 불필요하게 움직이지 않도록
     // 현재 파라미터 값으로 smoother의 시작점과 목표점을 함께 초기화한다.
     const auto initialGainDb = gainDb_->load (std::memory_order_relaxed);
     const auto initialLinearGain = gainlab::GainDsp::decibelsToLinear (initialGainDb);
     gainSmoother_.setCurrentAndTargetValue (initialLinearGain);
+
+    const auto initialMixPercent = mixPercent_->load (std::memory_order_relaxed);
+    const auto initialMix = gainlab::DryWetDsp::percentToProportion (initialMixPercent);
+    mixSmoother_.setCurrentAndTargetValue (initialMix);
 }
 
 void GainLabAudioProcessor::releaseResources()
@@ -82,9 +97,14 @@ void GainLabAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     //    공식: linearGain = 10 ^ (dB / 20)
     const auto linearGain = gainlab::GainDsp::decibelsToLinear (gainDb);
 
+    // UI의 0~100% 값을 DSP에서 사용하는 0.0~1.0 비율로 변환한다.
+    const auto mixPercent = mixPercent_->load (std::memory_order_relaxed);
+    const auto mix = gainlab::DryWetDsp::percentToProportion (mixPercent);
+
     // 새 값으로 즉시 점프하지 않고 20 ms 동안 이동하도록 목표만 전달한다.
     // smoother 자체는 멤버이므로 이전 processBlock()에서 진행한 위치를 기억한다.
     gainSmoother_.setTargetValue (linearGain);
+    mixSmoother_.setTargetValue (mix);
 
     // 3. 한 샘플마다 smoother를 한 번 진행하고, 그 값을 모든 채널에 똑같이 적용한다.
     //    샘플 루프가 바깥에 있어야 좌우 채널의 Gain이 정확히 동일하게 움직인다.
@@ -93,10 +113,18 @@ void GainLabAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (auto sample = 0; sample < buffer.getNumSamples(); ++sample)
     {
         const auto smoothedGain = gainSmoother_.getNextValue();
+        const auto smoothedMix = mixSmoother_.getNextValue();
 
         for (auto channel = 0; channel < inputChannels; ++channel)
-            channels[channel][sample] = gainlab::GainDsp::processSample (
-                channels[channel][sample], smoothedGain);
+        {
+            // Gain을 적용하기 전에 원본 샘플을 보존해야 Dry 신호로 사용할 수 있다.
+            const auto drySample = channels[channel][sample];
+            const auto wetSample = gainlab::GainDsp::processSample (drySample,
+                                                                    smoothedGain);
+
+            channels[channel][sample] = gainlab::DryWetDsp::mixSample (
+                drySample, wetSample, smoothedMix);
+        }
     }
 }
 

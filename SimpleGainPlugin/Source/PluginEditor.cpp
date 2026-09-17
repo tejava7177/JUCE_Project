@@ -33,7 +33,27 @@ GainLabAudioProcessorEditor::GainLabAudioProcessorEditor (GainLabAudioProcessor&
     gainAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
         processor_.parameters(), GainLabAudioProcessor::gainParameterId, gainKnob_);
 
-    statusLabel_.setText ("GAIN DSP CONNECTED",
+    mixLabel_.setText ("DRY / WET", juce::dontSendNotification);
+    mixLabel_.setJustificationType (juce::Justification::centred);
+    mixLabel_.setColour (juce::Label::textColourId, juce::Colour (0xffaeb8c4));
+    addAndMakeVisible (mixLabel_);
+
+    mixKnob_.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+    mixKnob_.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 88, 24);
+    mixKnob_.setRange (0.0, 100.0, 1.0);
+    mixKnob_.setValue (100.0);
+    mixKnob_.setTextValueSuffix (" %");
+    mixKnob_.setColour (juce::Slider::rotarySliderFillColourId,
+                        juce::Colour (0xff55d6a8));
+    mixKnob_.setColour (juce::Slider::rotarySliderOutlineColourId,
+                        juce::Colour (0xff36404c));
+    mixKnob_.setColour (juce::Slider::thumbColourId, juce::Colours::white);
+    addAndMakeVisible (mixKnob_);
+
+    mixAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
+        processor_.parameters(), GainLabAudioProcessor::mixParameterId, mixKnob_);
+
+    statusLabel_.setText ("GAIN + DRY/WET DSP CONNECTED",
                           juce::dontSendNotification);
     statusLabel_.setJustificationType (juce::Justification::centred);
     statusLabel_.setFont (juce::FontOptions (11.0f));
@@ -41,7 +61,7 @@ GainLabAudioProcessorEditor::GainLabAudioProcessorEditor (GainLabAudioProcessor&
                             juce::Colour (0xff7f8b99));
     addAndMakeVisible (statusLabel_);
 
-    setSize (320, 300);
+    setSize (420, 300);
 }
 
 void GainLabAudioProcessorEditor::paint (juce::Graphics& graphics)
@@ -59,7 +79,9 @@ void GainLabAudioProcessorEditor::paint (juce::Graphics& graphics)
 void GainLabAudioProcessorEditor::resized()
 {
     titleLabel_.setBounds (30, 26, getWidth() - 60, 38);
-    gainLabel_.setBounds (30, 76, getWidth() - 60, 22);
-    gainKnob_.setBounds ((getWidth() - 150) / 2, 94, 150, 150);
+    gainLabel_.setBounds (45, 76, 150, 22);
+    mixLabel_.setBounds (225, 76, 150, 22);
+    gainKnob_.setBounds (45, 94, 150, 150);
+    mixKnob_.setBounds (225, 94, 150, 150);
     statusLabel_.setBounds (30, getHeight() - 38, getWidth() - 60, 18);
 }

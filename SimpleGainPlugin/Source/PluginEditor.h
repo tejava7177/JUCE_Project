@@ -17,7 +17,10 @@ private:
 
     juce::Label titleLabel_;
     juce::Label gainLabel_;
+    juce::Label mixLabel_;
     juce::Label statusLabel_;
     juce::Slider gainKnob_;
+    juce::Slider mixKnob_;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> gainAttachment_;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> mixAttachment_;
 };

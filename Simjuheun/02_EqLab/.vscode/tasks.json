@@ -1,0 +1,31 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "EqLab: Configure",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["-S", ".", "-B", "build", "-DCMAKE_BUILD_TYPE=Debug"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            "label": "EqLab: Build DSP Test",
+            "type": "shell",
+            "command": "cmake",
+            "args": ["--build", "build", "--target", "EqLabDspTests", "-j8"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "dependsOn": "EqLab: Configure",
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "EqLab: Run DSP Test",
+            "type": "shell",
+            "command": "./build/EqLabDspTests",
+            "options": { "cwd": "${workspaceFolder}" },
+            "dependsOn": "EqLab: Build DSP Test",
+            "problemMatcher": [],
+            "group": { "kind": "test", "isDefault": true }
+        }
+    ]
+}

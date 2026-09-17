@@ -1,0 +1,11 @@
+.DS_Store
+build/
+build-*/
+Builds/
+JuceLibraryCode/
+DerivedData/
+*.component
+*.vst3
+*.app
+*.dylib
+*.log

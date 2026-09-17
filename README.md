@@ -7,7 +7,8 @@ JUCE 오디오 플러그인을 작은 단위로 직접 구현하고 검증하기
 
 | 폴더 | 목적 | 방식 |
 |---|---|---|
-| `SimpleGainPlugin/` | Gain, 파라미터, UI 연결, DSP 테스트 | CMake · JUCE 8 |
+| `Simjuheun/01_GainLab/` | Gain, Delay, Dry/Wet, smoothing | CMake · JUCE 8 |
+| `Simjuheun/02_EqLab/` | FIR/IIR과 EQ 필터 학습 | CMake · JUCE 8 |
 | `EQPlugin/` | 기존 EQ 실습 자료 | Projucer |
 | `VoltaAgentPlugin/` | 기존 플러그인·서버 연동 실습 자료 | Projucer |
 
@@ -17,7 +18,7 @@ JUCE 오디오 플러그인을 작은 단위로 직접 구현하고 검증하기
 ## 새 실습 플러그인 규칙
 
 ```text
-PluginName/
+Simjuheun/번호_PluginName/
 ├── CMakeLists.txt       # 빌드 설정의 원본
 ├── README.md            # 학습 목표와 실행 방법
 ├── Source/

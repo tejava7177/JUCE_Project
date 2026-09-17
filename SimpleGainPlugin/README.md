@@ -13,16 +13,18 @@ UI 노브 → JUCE 파라미터 → processBlock() → Gain DSP → 출력 샘�
 - Gain 범위 `-60 dB ~ +12 dB`
 - UI 노브와 DAW 파라미터 연결
 - 파라미터 저장·복원
+- 20 ms 선형 Gain smoothing
 - JUCE와 분리된 순수 Gain DSP
 - DAW 없이 실행하는 DSP 자동 테스트
 
-Gain 변화 스무딩은 아직 구현하지 않았습니다. 빠른 파라미터 변화에서 발생할 수 있는
-클릭·지퍼 노이즈를 확인한 뒤 다음 학습 단계에서 추가합니다.
+Smoother는 Processor 멤버로 유지되어 오디오 블록이 바뀌어도 이전 블록의 진행 상태를
+이어갑니다. 현재는 원리를 확인하기 위한 직접 구현이며 다음 학습 주제는 Dry/Wet입니다.
 
 ## 코드 구조
 
 ```text
 Source/DSP/GainDsp.h       dB 변환과 샘플 곱셈
+Source/DSP/LinearSmoother.h 블록 사이에 유지되는 선형 ramp
 Source/PluginProcessor.*   DAW 버퍼·파라미터와 DSP 연결
 Source/PluginEditor.*      플러그인 화면과 Gain 노브
 Tests/GainDspTests.cpp     알려진 샘플 배열로 DSP 검증
@@ -59,7 +61,9 @@ VS Code에서는 `Tasks: Run Test Task`에서 `GainLab: Run DSP Test`를 선택�
 입력 샘플: [ 1, 0.5, -0.5, -1 ]
 Gain: -6.0206 dB -> 0.5배
 출력 샘플: [ 0.5, 0.25, -0.25, -0.5 ]
-PASS: 모든 Gain DSP 테스트를 통과했습니다.
+Smoothing block 1: [ 0.875, 0.75 ]
+Smoothing block 2: [ 0.625, 0.5 ]
+PASS: Gain과 smoothing 테스트를 모두 통과했습니다.
 ```
 
 ## macOS 개발용 설치 위치

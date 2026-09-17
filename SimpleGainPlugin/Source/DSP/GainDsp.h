@@ -17,12 +17,18 @@ public:
         return std::pow (10.0f, gainDb / 20.0f);
     }
 
+    static float processSample (float inputSample, float linearGain) noexcept
+    {
+        // 실제 Gain DSP의 핵심이다. 입력 샘플 하나에 현재 Gain을 곱한다.
+        return inputSample * linearGain;
+    }
+
     static void applyGain (float* samples, int numSamples, float linearGain) noexcept
     {
         // samples는 한 채널의 첫 번째 샘플을 가리킨다.
         // 배열의 모든 샘플을 방문하면서 같은 Gain을 제자리에서 곱한다.
         for (int sample = 0; sample < numSamples; ++sample)
-            samples[sample] *= linearGain;
+            samples[sample] = processSample (samples[sample], linearGain);
     }
 };
 

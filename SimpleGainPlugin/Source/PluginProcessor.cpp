@@ -35,7 +35,16 @@ const juce::String GainLabAudioProcessor::getName() const
 
 void GainLabAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    juce::ignoreUnused (samplesPerBlock);
+
+    // ms 단위의 smoothing 시간을 현재 sample rate에 맞는 샘플 개수로 변환한다.
+    gainSmoother_.prepare (sampleRate, gainSmoothingSeconds);
+
+    // 플러그인을 처음 켰을 때 1.0에서 저장된 Gain까지 불필요하게 움직이지 않도록
+    // 현재 파라미터 값으로 smoother의 시작점과 목표점을 함께 초기화한다.
+    const auto initialGainDb = gainDb_->load (std::memory_order_relaxed);
+    const auto initialLinearGain = gainlab::GainDsp::decibelsToLinear (initialGainDb);
+    gainSmoother_.setCurrentAndTargetValue (initialLinearGain);
 }
 
 void GainLabAudioProcessor::releaseResources()
@@ -73,12 +82,21 @@ void GainLabAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     //    공식: linearGain = 10 ^ (dB / 20)
     const auto linearGain = gainlab::GainDsp::decibelsToLinear (gainDb);
 
-    // 3. 각 채널의 모든 샘플에 같은 배수를 곱한다.
-    //    getWritePointer()가 반환하는 주소는 DAW가 전달한 실제 샘플 메모리다.
-    for (auto channel = 0; channel < inputChannels; ++channel)
+    // 새 값으로 즉시 점프하지 않고 20 ms 동안 이동하도록 목표만 전달한다.
+    // smoother 자체는 멤버이므로 이전 processBlock()에서 진행한 위치를 기억한다.
+    gainSmoother_.setTargetValue (linearGain);
+
+    // 3. 한 샘플마다 smoother를 한 번 진행하고, 그 값을 모든 채널에 똑같이 적용한다.
+    //    샘플 루프가 바깥에 있어야 좌우 채널의 Gain이 정확히 동일하게 움직인다.
+    auto* channels = buffer.getArrayOfWritePointers();
+
+    for (auto sample = 0; sample < buffer.getNumSamples(); ++sample)
     {
-        auto* samples = buffer.getWritePointer (channel);
-        gainlab::GainDsp::applyGain (samples, buffer.getNumSamples(), linearGain);
+        const auto smoothedGain = gainSmoother_.getNextValue();
+
+        for (auto channel = 0; channel < inputChannels; ++channel)
+            channels[channel][sample] = gainlab::GainDsp::processSample (
+                channels[channel][sample], smoothedGain);
     }
 }
 

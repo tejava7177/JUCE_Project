@@ -46,6 +46,7 @@ juce_add_plugin(GainLab
 
 target_sources(GainLab PRIVATE
     Source/DSP/GainDsp.h
+    Source/DSP/LinearSmoother.h
     Source/PluginEditor.cpp
     Source/PluginEditor.h
     Source/PluginProcessor.cpp

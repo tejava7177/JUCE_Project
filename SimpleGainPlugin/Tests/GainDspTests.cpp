@@ -1,4 +1,5 @@
 #include "DSP/GainDsp.h"
+#include "DSP/LinearSmoother.h"
 
 #include <cmath>
 #include <iostream>
@@ -55,6 +56,41 @@ int main()
         return 1;
     }
 
-    std::cout << "PASS: 모든 Gain DSP 테스트를 통과했습니다.\n";
+    // Smoothing 상태가 두 개의 오디오 블록 사이에서도 이어지는지 확인한다.
+    // 테스트를 보기 쉽게 1,000 Hz * 0.004초 = 4 samples로 설정한다.
+    gainlab::LinearSmoother smoother;
+    smoother.prepare (1000.0, 0.004);
+    smoother.setCurrentAndTargetValue (1.0f);
+    smoother.setTargetValue (0.5f);
+
+    float smoothingBlock1[] { smoother.getNextValue(), smoother.getNextValue() };
+    float smoothingBlock2[] { smoother.getNextValue(), smoother.getNextValue() };
+
+    printSamples ("Smoothing block 1:", smoothingBlock1, 2);
+    printSamples ("Smoothing block 2:", smoothingBlock2, 2);
+
+    const float expectedSmoothing[] { 0.875f, 0.75f, 0.625f, 0.5f };
+    const float actualSmoothing[] {
+        smoothingBlock1[0], smoothingBlock1[1],
+        smoothingBlock2[0], smoothingBlock2[1]
+    };
+
+    for (int i = 0; i < 4; ++i)
+    {
+        if (! nearlyEqual (actualSmoothing[i], expectedSmoothing[i]))
+        {
+            std::cerr << "FAIL: smoothing의 " << i
+                      << "번째 값이 예상값과 다릅니다.\n";
+            return 1;
+        }
+    }
+
+    if (smoother.isSmoothing())
+    {
+        std::cerr << "FAIL: 마지막 샘플 뒤에도 smoothing이 끝나지 않았습니다.\n";
+        return 1;
+    }
+
+    std::cout << "PASS: Gain과 smoothing 테스트를 모두 통과했습니다.\n";
     return 0;
 }

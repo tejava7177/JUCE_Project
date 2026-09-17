@@ -2,6 +2,8 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "DSP/LinearSmoother.h"
+
 class GainLabAudioProcessor final : public juce::AudioProcessor
 {
 public:
@@ -38,6 +40,12 @@ public:
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
+    static constexpr double gainSmoothingSeconds = 0.020;
+
     juce::AudioProcessorValueTreeState parameters_;
     std::atomic<float>* gainDb_ = nullptr;
+
+    // processBlock() 호출이 끝나도 현재 ramp 위치를 기억해야 하므로 멤버로 보관한다.
+    // UI는 이 객체를 직접 만지지 않고, 오디오 스레드만 값을 진행시킨다.
+    gainlab::LinearSmoother gainSmoother_;
 };

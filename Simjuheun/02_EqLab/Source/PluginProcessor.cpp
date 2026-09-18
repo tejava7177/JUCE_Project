@@ -1,12 +1,47 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
-#include "DSP/PassthroughDsp.h"
 
 EqLabAudioProcessor::EqLabAudioProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
+                          .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+      parameters_ (*this, nullptr, "PARAMETERS", createParameterLayout())
 {
+    frequencyHz_ = parameters_.getRawParameterValue (frequencyParameterId);
+    gainDb_ = parameters_.getRawParameterValue (gainParameterId);
+    q_ = parameters_.getRawParameterValue (qParameterId);
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout
+EqLabAudioProcessor::createParameterLayout()
+{
+    juce::AudioProcessorValueTreeState::ParameterLayout layout;
+
+    // 사람의 주파수 인지는 로그에 가까우므로 1 kHz가 노브 중앙에 오도록 skew를 준다.
+    juce::NormalisableRange<float> frequencyRange { 20.0f, 20000.0f, 1.0f };
+    frequencyRange.setSkewForCentre (1000.0f);
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { frequencyParameterId, 1 },
+        "Frequency",
+        frequencyRange,
+        1000.0f,
+        juce::AudioParameterFloatAttributes().withLabel ("Hz")));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { gainParameterId, 1 },
+        "Gain",
+        juce::NormalisableRange<float> { -12.0f, 12.0f, 0.1f },
+        0.0f,
+        juce::AudioParameterFloatAttributes().withLabel ("dB")));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { qParameterId, 1 },
+        "Q",
+        juce::NormalisableRange<float> { 0.1f, 10.0f, 0.01f },
+        1.0f));
+
+    return layout;
 }
 
 const juce::String EqLabAudioProcessor::getName() const
@@ -16,8 +51,11 @@ const juce::String EqLabAudioProcessor::getName() const
 
 void EqLabAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // 다음 단계에서 IIR/FIR 필터의 sample rate와 내부 상태를 여기서 준비한다.
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
+    juce::ignoreUnused (samplesPerBlock);
+    sampleRate_ = sampleRate;
+
+    for (auto& filter : channelFilters_)
+        filter.reset();
 }
 
 void EqLabAudioProcessor::releaseResources()
@@ -47,14 +85,23 @@ void EqLabAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (auto channel = inputChannels; channel < outputChannels; ++channel)
         buffer.clear (channel, 0, buffer.getNumSamples());
 
-    // 현재 단계에서는 모든 샘플이 그대로 통과한다.
-    // 다음 단계에서 이 한 줄이 IIR biquad EQ 호출로 바뀐다.
+    // 사용자가 조절한 세 값과 현재 Sample Rate로 Bell EQ 계수를 만든다.
+    // 계수는 블록마다 한 번 계산하고, 블록 안의 모든 샘플에 재사용한다.
+    const auto coefficients = eqlab::BiquadBellDsp::makeBellCoefficients (
+        sampleRate_,
+        frequencyHz_->load (std::memory_order_relaxed),
+        gainDb_->load (std::memory_order_relaxed),
+        q_->load (std::memory_order_relaxed));
+
     for (auto channel = 0; channel < inputChannels; ++channel)
     {
+        auto& filter = channelFilters_[static_cast<std::size_t> (channel)];
+        filter.setCoefficients (coefficients);
+
         auto* samples = buffer.getWritePointer (channel);
 
         for (auto sample = 0; sample < buffer.getNumSamples(); ++sample)
-            samples[sample] = eqlab::PassthroughDsp::processSample (samples[sample]);
+            samples[sample] = filter.processSample (samples[sample]);
     }
 }
 
@@ -78,12 +125,17 @@ void EqLabAudioProcessor::changeProgramName (int, const juce::String&) {}
 
 void EqLabAudioProcessor::getStateInformation (juce::MemoryBlock& destinationData)
 {
-    juce::ignoreUnused (destinationData);
+    const auto state = parameters_.copyState();
+    const auto xml = state.createXml();
+    copyXmlToBinary (*xml, destinationData);
 }
 
 void EqLabAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    juce::ignoreUnused (data, sizeInBytes);
+    const auto xml = getXmlFromBinary (data, sizeInBytes);
+
+    if (xml != nullptr && xml->hasTagName (parameters_.state.getType()))
+        parameters_.replaceState (juce::ValueTree::fromXml (*xml));
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

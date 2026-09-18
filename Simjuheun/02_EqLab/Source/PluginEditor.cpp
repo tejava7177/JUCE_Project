@@ -1,7 +1,7 @@
 #include "PluginEditor.h"
 
 EqLabAudioProcessorEditor::EqLabAudioProcessorEditor (EqLabAudioProcessor& audioProcessor)
-    : AudioProcessorEditor (&audioProcessor)
+    : AudioProcessorEditor (&audioProcessor), processor_ (audioProcessor)
 {
     titleLabel_.setText ("EqLab", juce::dontSendNotification);
     titleLabel_.setJustificationType (juce::Justification::centred);
@@ -9,31 +9,60 @@ EqLabAudioProcessorEditor::EqLabAudioProcessorEditor (EqLabAudioProcessor& audio
     titleLabel_.setColour (juce::Label::textColourId, juce::Colours::white);
     addAndMakeVisible (titleLabel_);
 
-    subtitleLabel_.setText ("FIR / IIR LEARNING LAB", juce::dontSendNotification);
+    subtitleLabel_.setText ("IIR BIQUAD / BELL EQ", juce::dontSendNotification);
     subtitleLabel_.setJustificationType (juce::Justification::centred);
     subtitleLabel_.setColour (juce::Label::textColourId, juce::Colour (0xff9aa8b8));
     addAndMakeVisible (subtitleLabel_);
 
-    // JUCE에 UTF-8 문자열임을 명시해야 한글 바이트가 깨지지 않는다.
-    firLabel_.setText (juce::String::fromUTF8 (u8"FIR\n현재 + 과거 입력"),
-                       juce::dontSendNotification);
-    firLabel_.setJustificationType (juce::Justification::centred);
-    firLabel_.setColour (juce::Label::textColourId, juce::Colour (0xff6fb4ff));
-    addAndMakeVisible (firLabel_);
+    auto prepareLabel = [this] (juce::Label& label, const juce::String& text)
+    {
+        label.setText (text, juce::dontSendNotification);
+        label.setJustificationType (juce::Justification::centred);
+        label.setColour (juce::Label::textColourId, juce::Colour (0xffaeb8c4));
+        addAndMakeVisible (label);
+    };
 
-    iirLabel_.setText (juce::String::fromUTF8 (u8"IIR / BIQUAD\n입력 + 과거 출력"),
-                       juce::dontSendNotification);
-    iirLabel_.setJustificationType (juce::Justification::centred);
-    iirLabel_.setColour (juce::Label::textColourId, juce::Colour (0xffffb467));
-    addAndMakeVisible (iirLabel_);
+    auto prepareKnob = [this] (juce::Slider& knob, juce::Colour colour)
+    {
+        knob.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+        knob.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 94, 24);
+        knob.setColour (juce::Slider::rotarySliderFillColourId, colour);
+        knob.setColour (juce::Slider::rotarySliderOutlineColourId,
+                        juce::Colour (0xff36404c));
+        knob.setColour (juce::Slider::thumbColourId, juce::Colours::white);
+        addAndMakeVisible (knob);
+    };
 
-    statusLabel_.setText ("PASS-THROUGH / EQ DSP NOT CONNECTED YET",
+    prepareLabel (frequencyLabel_, "FREQUENCY");
+    prepareLabel (gainLabel_, "GAIN");
+    prepareLabel (qLabel_, "Q");
+
+    prepareKnob (frequencyKnob_, juce::Colour (0xff4da3ff));
+    frequencyKnob_.setRange (20.0, 20000.0, 1.0);
+    frequencyKnob_.setSkewFactorFromMidPoint (1000.0);
+    frequencyKnob_.setTextValueSuffix (" Hz");
+
+    prepareKnob (gainKnob_, juce::Colour (0xffffad5c));
+    gainKnob_.setRange (-12.0, 12.0, 0.1);
+    gainKnob_.setTextValueSuffix (" dB");
+
+    prepareKnob (qKnob_, juce::Colour (0xff55d6a8));
+    qKnob_.setRange (0.1, 10.0, 0.01);
+
+    frequencyAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
+        processor_.parameters(), EqLabAudioProcessor::frequencyParameterId, frequencyKnob_);
+    gainAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
+        processor_.parameters(), EqLabAudioProcessor::gainParameterId, gainKnob_);
+    qAttachment_ = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
+        processor_.parameters(), EqLabAudioProcessor::qParameterId, qKnob_);
+
+    statusLabel_.setText ("BELL EQ DSP CONNECTED",
                           juce::dontSendNotification);
     statusLabel_.setJustificationType (juce::Justification::centred);
     statusLabel_.setColour (juce::Label::textColourId, juce::Colour (0xff7f8b99));
     addAndMakeVisible (statusLabel_);
 
-    setSize (500, 300);
+    setSize (560, 300);
 }
 
 void EqLabAudioProcessorEditor::paint (juce::Graphics& graphics)
@@ -46,18 +75,17 @@ void EqLabAudioProcessorEditor::paint (juce::Graphics& graphics)
     graphics.setColour (juce::Colour (0xff35404c));
     graphics.drawRoundedRectangle (panel, 14.0f, 1.0f);
 
-    const auto firPanel = juce::Rectangle<float> (45.0f, 118.0f, 190.0f, 82.0f);
-    const auto iirPanel = juce::Rectangle<float> (265.0f, 118.0f, 190.0f, 82.0f);
-    graphics.setColour (juce::Colour (0xff18212b));
-    graphics.fillRoundedRectangle (firPanel, 10.0f);
-    graphics.fillRoundedRectangle (iirPanel, 10.0f);
 }
 
 void EqLabAudioProcessorEditor::resized()
 {
     titleLabel_.setBounds (30, 26, getWidth() - 60, 40);
     subtitleLabel_.setBounds (30, 70, getWidth() - 60, 22);
-    firLabel_.setBounds (45, 118, 190, 82);
-    iirLabel_.setBounds (265, 118, 190, 82);
+    frequencyLabel_.setBounds (20, 102, 160, 22);
+    gainLabel_.setBounds (200, 102, 160, 22);
+    qLabel_.setBounds (380, 102, 160, 22);
+    frequencyKnob_.setBounds (20, 120, 160, 125);
+    gainKnob_.setBounds (200, 120, 160, 125);
+    qKnob_.setBounds (380, 120, 160, 125);
     statusLabel_.setBounds (30, getHeight() - 48, getWidth() - 60, 22);
 }

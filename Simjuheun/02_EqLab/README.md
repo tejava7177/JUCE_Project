@@ -21,22 +21,23 @@ IIR: 현재·과거 입력 + 과거 출력 → 출력
 
 ## 현재 단계
 
-현재 플러그인은 입력을 변경하지 않고 그대로 출력하는 `Pass-through` 상태입니다.
-즉 AU/VST3 프로젝트와 테스트 환경만 준비됐고 EQ 필터는 아직 연결하지 않았습니다.
-
-다음 단계에서는 하나의 IIR biquad Bell EQ를 만들고 아래 파라미터를 연결합니다.
+현재 하나의 IIR Biquad Bell EQ가 실제 오디오 처리에 연결되어 있습니다.
 
 - Frequency: 어느 주파수를 처리할지
 - Gain: 해당 주파수를 얼마나 키우거나 줄일지
 - Q: 처리할 주파수 범위를 얼마나 좁거나 넓게 할지
 
+플러그인은 세 파라미터와 Sample Rate를 Bell 공식에 넣어 `b0`, `b1`, `b2`, `a1`,
+`a2` 계수를 계산합니다. 좌우 채널은 각자 과거 입력과 출력을 기억하며, Gain 0 dB에서는
+입력을 그대로 출력합니다.
+
 ## 구조
 
 ```text
-Source/DSP/PassthroughDsp.h 현재 입력을 그대로 반환하는 시작점
+Source/DSP/BiquadBellDsp.h  Bell 계수 계산과 샘플 처리
 Source/PluginProcessor.*   DAW 오디오 버퍼와 DSP 연결
-Source/PluginEditor.*      현재 학습 단계 표시
-Tests/EqLabDspTests.cpp    DAW 없이 기준 동작 검증
+Source/PluginEditor.*      Frequency, Gain, Q UI
+Tests/EqLabDspTests.cpp    1 kHz에서 실제 +6 dB인지 검증
 ```
 
 ## 빌드와 테스트

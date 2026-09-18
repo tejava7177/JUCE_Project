@@ -45,7 +45,7 @@ juce_add_plugin(EqLab
 )
 
 target_sources(EqLab PRIVATE
-    Source/DSP/PassthroughDsp.h
+    Source/DSP/BiquadBellDsp.h
     Source/PluginEditor.cpp
     Source/PluginEditor.h
     Source/PluginProcessor.cpp

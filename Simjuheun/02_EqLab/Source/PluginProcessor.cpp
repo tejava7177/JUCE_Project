@@ -7,15 +7,23 @@ EqLabAudioProcessor::EqLabAudioProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       parameters_ (*this, nullptr, "PARAMETERS", createParameterLayout())
 {
+    filterType_ = parameters_.getRawParameterValue (filterTypeParameterId);
     frequencyHz_ = parameters_.getRawParameterValue (frequencyParameterId);
     gainDb_ = parameters_.getRawParameterValue (gainParameterId);
     q_ = parameters_.getRawParameterValue (qParameterId);
+    slope_ = parameters_.getRawParameterValue (slopeParameterId);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout
 EqLabAudioProcessor::createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
+
+    layout.add (std::make_unique<juce::AudioParameterChoice> (
+        juce::ParameterID { filterTypeParameterId, 1 },
+        "Filter Type",
+        juce::StringArray { "Bell", "Low-pass", "High-pass", "Low-shelf", "High-shelf", "Notch" },
+        0));
 
     // 사람의 주파수 인지는 로그에 가까우므로 1 kHz가 노브 중앙에 오도록 skew를 준다.
     juce::NormalisableRange<float> frequencyRange { 20.0f, 20000.0f, 1.0f };
@@ -39,6 +47,12 @@ EqLabAudioProcessor::createParameterLayout()
         juce::ParameterID { qParameterId, 1 },
         "Q",
         juce::NormalisableRange<float> { 0.1f, 10.0f, 0.01f },
+        1.0f));
+
+    layout.add (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID { slopeParameterId, 1 },
+        "Shelf Slope",
+        juce::NormalisableRange<float> { 0.1f, 1.0f, 0.01f },
         1.0f));
 
     return layout;
@@ -85,13 +99,17 @@ void EqLabAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (auto channel = inputChannels; channel < outputChannels; ++channel)
         buffer.clear (channel, 0, buffer.getNumSamples());
 
-    // 사용자가 조절한 세 값과 현재 Sample Rate로 Bell EQ 계수를 만든다.
-    // 계수는 블록마다 한 번 계산하고, 블록 안의 모든 샘플에 재사용한다.
-    const auto coefficients = eqlab::BiquadBellDsp::makeBellCoefficients (
+    // 사용자가 선택한 필터 종류에 따라 계수를 만드는 공식만 바꾼다.
+    // 실제 샘플 계산은 모든 필터가 같은 Biquad 식을 사용한다.
+    const auto selectedType = static_cast<eqlab::FilterType> (
+        static_cast<int> (filterType_->load (std::memory_order_relaxed)));
+    const auto coefficients = eqlab::BiquadDsp::makeCoefficients (
+        selectedType,
         sampleRate_,
         frequencyHz_->load (std::memory_order_relaxed),
         gainDb_->load (std::memory_order_relaxed),
-        q_->load (std::memory_order_relaxed));
+        q_->load (std::memory_order_relaxed),
+        slope_->load (std::memory_order_relaxed));
 
     for (auto channel = 0; channel < inputChannels; ++channel)
     {

@@ -1,0 +1,36 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "1. Configure DeEsserLab",
+      "type": "shell",
+      "command": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "2. Build DSP Tests",
+      "type": "shell",
+      "command": "cmake --build build --target DeEsserLabDspTests -j8",
+      "options": { "cwd": "${workspaceFolder}" },
+      "dependsOn": "1. Configure DeEsserLab",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "3. Run DSP Tests",
+      "type": "shell",
+      "command": "./build/DeEsserLabDspTests",
+      "options": { "cwd": "${workspaceFolder}" },
+      "dependsOn": "2. Build DSP Tests",
+      "problemMatcher": []
+    },
+    {
+      "label": "4. Build Plugin",
+      "type": "shell",
+      "command": "cmake --build build --target DeEsserLab_All -j8",
+      "options": { "cwd": "${workspaceFolder}" },
+      "dependsOn": "1. Configure DeEsserLab",
+      "problemMatcher": ["$gcc"]
+    }
+  ]
+}

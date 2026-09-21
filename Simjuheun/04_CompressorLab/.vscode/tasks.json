@@ -1,0 +1,35 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "1. Configure CompressorLab",
+            "type": "shell",
+            "command": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "2. Build DSP Tests",
+            "type": "shell",
+            "command": "cmake --build build --target CompressorLabDspTests -j8",
+            "group": "build",
+            "dependsOn": "1. Configure CompressorLab",
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "3. Run DSP Tests",
+            "type": "shell",
+            "command": "./build/CompressorLabDspTests",
+            "dependsOn": "2. Build DSP Tests",
+            "problemMatcher": []
+        },
+        {
+            "label": "4. Build Plugin",
+            "type": "shell",
+            "command": "cmake --build build --target CompressorLab_All -j8",
+            "group": { "kind": "build", "isDefault": true },
+            "dependsOn": "1. Configure CompressorLab",
+            "problemMatcher": ["$gcc"]
+        }
+    ]
+}

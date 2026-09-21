@@ -21,23 +21,26 @@ IIR: 현재·과거 입력 + 과거 출력 → 출력
 
 ## 현재 단계
 
-현재 하나의 IIR Biquad Bell EQ가 실제 오디오 처리에 연결되어 있습니다.
+현재 하나의 Biquad가 선택한 필터 공식에 따라 Bell, Pass, Shelf, Notch로 동작합니다.
 
-- Frequency: 어느 주파수를 처리할지
-- Gain: 해당 주파수를 얼마나 키우거나 줄일지
-- Q: 처리할 주파수 범위를 얼마나 좁거나 넓게 할지
+- Filter Type: Bell / Low-pass / High-pass / Low-shelf / High-shelf / Notch 선택
+- Frequency: Bell과 Shelf의 중심 또는 Pass 필터의 Cutoff
+- Gain: Bell의 변화량 또는 Shelf가 도달할 저역·고역 Gain
+- Q: Bell의 폭 또는 Cutoff 주변의 공진 정도
+- Shelf Slope: 0 dB 영역과 설정 Gain 영역을 연결하는 경사
+- Notch: Frequency를 상쇄하고 Q로 제거 영역의 폭을 조절
 
-플러그인은 세 파라미터와 Sample Rate를 Bell 공식에 넣어 `b0`, `b1`, `b2`, `a1`,
-`a2` 계수를 계산합니다. 좌우 채널은 각자 과거 입력과 출력을 기억하며, Gain 0 dB에서는
-입력을 그대로 출력합니다.
+필터 종류가 바뀌어도 샘플 처리식은 동일합니다. 선택한 종류에 맞는 공식으로 `b0`,
+`b1`, `b2`, `a1`, `a2`를 다시 계산합니다. GUI의 응답 곡선도 같은 계수를 사용하므로
+현재 설정이 각 주파수를 얼마나 바꾸는지 바로 확인할 수 있습니다.
 
 ## 구조
 
 ```text
-Source/DSP/BiquadBellDsp.h  Bell 계수 계산과 샘플 처리
+Source/DSP/BiquadDsp.h      여섯 필터의 계수 계산, 응답 계산, 샘플 처리
 Source/PluginProcessor.*   DAW 오디오 버퍼와 DSP 연결
-Source/PluginEditor.*      Frequency, Gain, Q UI
-Tests/EqLabDspTests.cpp    1 kHz에서 실제 +6 dB인지 검증
+Source/PluginEditor.*      필터 선택, 노브, 실시간 응답 곡선 UI
+Tests/EqLabDspTests.cpp    Bell, Pass, Shelf, Notch의 주파수 응답 검증
 ```
 
 ## 빌드와 테스트

@@ -315,3 +315,36 @@
 
 - Build the plugin
 - Confirm Flask logs no longer contain legacy 404 traffic
+
+---
+
+## 2026-08-15 — VoltaDeEsserPlugin: De-Esser VST3 초판 (신규 프로젝트)
+
+- 위치: `/Users/simjuheun/Developer/JUCE_prac/VoltaDeEsserPlugin` (신규 — 기존 프로젝트 무접촉)
+- 내용: 웹 `volta-service-demo`의 De-Esser v2 · Overlap-safe Event-End 엔진을
+  JUCE 8.0.12 / CMake 기반 macOS VST3 + Standalone으로 이식.
+  파라미터 6개(APVTS, ID 동결), Learn/Adaptive 분석(lock-free FIFO + 백그라운드 워커),
+  Delta 모니터, 다크 단일화면 UI(노브 3 + meter 3 + LEARN/DELTA/BYPASS/OUTPUT).
+- 검증: 단위 37개 통과 · 웹↔C++ 오프라인 골든 패리티 bit-identical(실보컬 포함 max diff 2.2e-17) ·
+  block size 불변성 bit-identical · processBlock 무할당 계측 0회 · CPU 0.004×RT ·
+  JUCE VST3 hosting 스크립트 검증 전부 통과. 상세: `VoltaDeEsserPlugin/docs/`.
+- 산출물: `VoltaDeEsserPlugin/build/VoltaDeEsser_artefacts/Release/VST3/VoltaDeEsser.vst3`,
+  설치본 `~/Library/Audio/Plug-Ins/VST3/VoltaDeEsser.vst3` (신규 — 덮어쓰기 아님).
+- 상태: PARTIALLY_VERIFIED — 실제 DAW GUI 확인·최종 청감 A/B·배포 서명은 사용자 단계.
+- git: stage/commit/push 하지 않음. API_CONTRACT.md 무수정(본 플러그인은 서버 미사용 로컬 DSP).
+
+## 2026-08-16 — VoltaDeEsserPlugin: Learn Voice 추천값 자동 적용
+
+- Learn 성공 시 세 노브(`sibilance_amount`/`transient_amount`/`breathy_amount`)에
+  추천값을 자동 적용하고 UNDO를 제공하는 기능을 완성. `output_gain_db`는 무접촉.
+- 추천은 순수 함수 `makeRecommendation(profile, summary)` 한 곳에서 계산(결정론적),
+  기존 엔진의 이벤트 판별·특징값 함수를 공통화해 재사용(추천용 별도 기준 없음).
+- 개인화 불가·저신뢰 시 `50/0/0` fallback, 학습 실패·취소 시 기존 설정·프로필 무변경.
+- 적용은 message 스레드 APVTS gesture, learn generation당 정확히 1회(재오픈·복원 시 무적용).
+- 선행 결함 수정: `DbHistogram` 범위가 좁아 밝은 프레임이 포화되던 문제(LEARNED 프로필의
+  highBaseline에도 영향) → `[-160,+100)`로 확대.
+- 실보컬 6개로 추천 임계값 보정(합성 fixture만으로는 비현실적이었음 — 실측 excess 0~22 dB).
+- 검증: 단위 53 + 프로세서 10 + VST3 host validation 전부 통과, auval SUCCEEDED,
+  AU/VST3/Standalone Release 빌드 경고 0. 상세: `VoltaDeEsserPlugin/WORKLOG.md`.
+- 설치: 사용자 승인 후 `~/Library/Audio/Plug-Ins/{Components,VST3}` 갱신.
+- git: stage/commit/push 하지 않음. API_CONTRACT.md 무수정.

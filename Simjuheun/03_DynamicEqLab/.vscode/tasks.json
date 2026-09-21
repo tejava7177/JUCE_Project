@@ -1,0 +1,38 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "1. Configure DynamicEqLab",
+            "type": "shell",
+            "command": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "2. Build DSP Tests",
+            "type": "shell",
+            "command": "cmake --build build --target DynamicEqLabDspTests -j8",
+            "group": "build",
+            "dependsOn": "1. Configure DynamicEqLab",
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "3. Run DSP Tests",
+            "type": "shell",
+            "command": "./build/DynamicEqLabDspTests",
+            "dependsOn": "2. Build DSP Tests",
+            "problemMatcher": []
+        },
+        {
+            "label": "4. Build Plugin",
+            "type": "shell",
+            "command": "cmake --build build --target DynamicEqLab_All -j8",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "dependsOn": "1. Configure DynamicEqLab",
+            "problemMatcher": ["$gcc"]
+        }
+    ]
+}
